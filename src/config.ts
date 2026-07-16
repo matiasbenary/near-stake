@@ -8,11 +8,5 @@ export const RpcUrls = {
 
 export const LiquidPools =
   NetworkId === 'mainnet'
-    ? [
-        { id: 'meta-pool.near', name: 'META POOL' },
-        { id: 'linear-protocol.near', name: 'LINEAR' },
-      ]
-    : [
-        { id: 'meta-v2.pool.testnet', name: 'META POOL' },
-        { id: 'linear-protocol.testnet', name: 'LINEAR' },
-      ];
+    ? [{ id: 'meta-pool.near' }, { id: 'linear-protocol.near' }]
+    : [{ id: 'meta-v2.pool.testnet' }, { id: 'linear-protocol.testnet' }];

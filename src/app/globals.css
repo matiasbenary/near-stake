@@ -368,11 +368,13 @@ a {
   color: var(--accent);
 }
 
-.meta {
+.meta,
+.avail {
   font-family: var(--mono);
   font-size: 0.75rem;
   color: var(--muted);
   margin: -8px 0 16px;
+  font-variant-numeric: tabular-nums;
 }
 
 .meta .net {
@@ -494,14 +496,6 @@ a {
 .modes button.active {
   background: var(--surface-2);
   color: var(--accent);
-}
-
-.avail {
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 0.75rem;
-  color: var(--muted);
-  margin: -6px 0 16px;
 }
 
 .btn-block {

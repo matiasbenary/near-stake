@@ -8,8 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "start": "next start"
   },
   "dependencies": {
     "@near-js/utils": "^2.5.1",
@@ -22,10 +21,6 @@
     "@types/node": "^24.7.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
-    "encoding": "^0.1.13",
-    "eslint": "^9",
-    "eslint-config-next": "^15",
-    "pino-pretty": "^11.2.2",
     "typescript": "^5.9.3"
   }
 }
