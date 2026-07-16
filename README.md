@@ -1,45 +1,57 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# NEAR Stake
 
-## Getting Started
+A non-custodial web interface for staking NEAR. Connect a NEAR wallet, compare liquid-staking pools and validators, stake or unstake, and track the pools in which the connected account has funds.
 
-First, run the development server:
+## What it does
+
+- Lists active NEAR validators with net APY, uptime, stake percentage, and fee.
+- Keeps Meta Pool and LiNEAR available as liquid-staking options.
+- Displays direct staking balances, liquid-token balances, and pending withdrawals.
+- Supports staking, normal unstaking, withdrawals, and Meta Pool fast unstaking.
+- Uses the connected wallet for transactions. This app never receives or stores private keys.
+
+## Stack
+
+- Next.js 15 and React 18
+- TypeScript
+- `near-connect-hooks` and `near-api-js`
+- TanStack Table for validator sorting
+
+## Run locally
+
+Requirements: Node.js 20 or later and npm.
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+Other commands:
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+```bash
+npx tsc --noEmit
+npm run build
+npm run start
+```
 
-## Learn More about NEAR
+## Network configuration
 
-To learn more about NEAR, take a look at the following resources:
+The application uses NEAR mainnet by default. To run against testnet, add this to `.env.local`:
 
-- [NEAR Documentation](https://docs.near.org) - learn about NEAR.
-- [Frontend Docs](https://docs.near.org/build/web3-apps/quickstart) - learn about this example.
+```bash
+NEXT_PUBLIC_NEAR_NETWORK=testnet
+```
 
-You can check out [the NEAR repository](https://github.com/near) - your feedback and contributions are welcome!
+RPC endpoints and liquid-pool configuration live in [`src/config.ts`](src/config.ts).
 
-## Learn More about Next.js
+## Data sources
 
-To learn more about Next.js, take a look at the following resources:
+The validator directory is read from NearBlocks. Account staking positions are discovered through FastNEAR and then verified with each pool contract's `get_account` view method. Liquid-staking token balances use `ft_balance_of`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+These are browser-side requests. A static deployment does not proxy them through the hosting provider, so public API rate limits and availability still apply. For a high-traffic deployment, add a cached server-side endpoint for the validator list and use provider credentials where available.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+## Notes
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+Staking and liquid-staking products carry protocol, validator, smart-contract, and market risks. APY, uptime, and fees are informational values supplied by third-party data sources and may be delayed or unavailable. Always review the transaction details in the wallet before approving.
