@@ -531,6 +531,14 @@ a {
   overflow: auto;
 }
 
+.validator-load-error {
+  padding: 16px 8px;
+}
+
+.validator-load-error .hint {
+  margin: 0 0 12px;
+}
+
 .validator-table {
   width: 100%;
   min-width: 620px;
@@ -803,6 +811,10 @@ a {
 .footer-inner {
   display: flex;
   justify-content: space-between;
+}
+
+.footer-repo:hover {
+  color: var(--accent);
 }
 
 @media (max-width: 480px) {

@@ -17,6 +17,8 @@ type Props = {
   busy: boolean;
   baseApy: number | null;
   fees: Record<string, number>;
+  error: string;
+  onRetry: () => void;
   onSelect: (id: string) => void;
 };
 
@@ -34,6 +36,8 @@ export function ValidatorList({
   busy,
   baseApy,
   fees,
+  error,
+  onRetry,
   onSelect,
 }: Props) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'apy', desc: true }]);
@@ -176,7 +180,16 @@ export function ValidatorList({
             {table.getRowModel().rows.map((row) => renderRow(row.original))}
           </tbody>
         </table>
-        {validators.length === 0 && <p className="hint">Loading validators…</p>}
+        {error ? (
+          <div className="validator-load-error">
+            <p className="hint error">{error}</p>
+            <button className="btn" disabled={busy} onClick={onRetry}>
+              Retry loading validators
+            </button>
+          </div>
+        ) : validators.length === 0 ? (
+          <p className="hint">Loading validators…</p>
+        ) : null}
         {validators.length > 0 && directValidators.length === 0 && (
           <p className="hint">No validators with a positive net APY are available.</p>
         )}
