@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
 import { yoctoToNear } from 'near-api-js';
 import { LiquidPools } from '@/config';
@@ -22,7 +22,6 @@ export function StakingConsole() {
 
   const [validators, setValidators] = useState<Validator[]>([]);
   const [selected, setSelected] = useState(LiquidPools[0].id);
-  const [account, setAccount] = useState<PoolAccount | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -32,6 +31,32 @@ export function StakingConsole() {
   const [liquidBalances, setLiquidBalances] = useState<Record<string, string>>({});
   const [knownAccounts, setKnownAccounts] = useState<Record<string, PoolAccount>>({});
   const [positionsReady, setPositionsReady] = useState(false);
+  const selectionInitialized = useRef(false);
+  const account = knownAccounts[selected] ?? null;
+
+  const selectPool = useCallback((poolId: string) => {
+    selectionInitialized.current = true;
+    setSelected(poolId);
+  }, []);
+
+  useEffect(() => {
+    selectionInitialized.current = false;
+  }, [signedAccountId]);
+
+  const loadPoolAccount = useCallback(
+    (poolId: string) =>
+      dedupeInFlight(
+        `pool-account:${signedAccountId}:${poolId}`,
+        () =>
+          viewFunction({
+            contractId: poolId,
+            method: 'get_account',
+            args: { account_id: signedAccountId },
+          }) as Promise<PoolAccount>
+      ),
+    [signedAccountId, viewFunction]
+  );
+
   useEffect(() => {
     let stale = false;
     (async () => {
@@ -47,7 +72,7 @@ export function StakingConsole() {
         }
         if (stale) return;
         setValidators([
-          ...LiquidPools.map((p) => ({ id: p.id, stake: '0', liquid: true })),
+          ...LiquidPools.map((p) => ({ id: p.id, liquid: true })),
           ...pools,
         ]);
         setFees((prev) => ({ ...feeMap, ...prev }));
@@ -114,28 +139,19 @@ export function StakingConsole() {
     );
     const poolAccountResultsPromise = Promise.allSettled(
       poolIds.map((poolId) =>
-        dedupeInFlight(
-          `pool-account:${signedAccountId}:${poolId}`,
-          () =>
-            viewFunction({
-              contractId: poolId,
-              method: 'get_account',
-              args: { account_id: signedAccountId },
-            }) as Promise<PoolAccount>
-        ).then((account) => ({ id: poolId, account }))
+        loadPoolAccount(poolId).then((account) => ({ id: poolId, account }))
       )
     );
     const [liquidBalanceResults, results] = await Promise.all([
       liquidBalanceResultsPromise,
       poolAccountResultsPromise,
     ]);
-    setLiquidBalances(
-      Object.fromEntries(
-        liquidBalanceResults.flatMap((result, index) =>
-          result.status === 'fulfilled' ? [[LiquidPools[index].id, result.value]] : []
-        )
+    const nextLiquidBalances = Object.fromEntries(
+      liquidBalanceResults.flatMap((result, index) =>
+        result.status === 'fulfilled' ? [[LiquidPools[index].id, result.value]] : []
       )
     );
+    setLiquidBalances(nextLiquidBalances);
     const accounts = new Map(
       results
         .filter(
@@ -146,27 +162,32 @@ export function StakingConsole() {
     );
 
     setKnownAccounts(Object.fromEntries(accounts));
-    setAccount(accounts.get(selected) ?? null);
-    setPositions(
-      pools
-        .map((p): Position | null => {
-          const account = accounts.get(p.pool_id);
-          if (!account) return null;
-          return {
-            id: p.pool_id,
-            staked_balance: BigInt(account.staked_balance),
-            unstaked_balance: BigInt(account.unstaked_balance),
-            can_withdraw: account.can_withdraw,
-          };
-        })
-        .filter((p): p is Position => !!p)
-        .filter((p) => p.staked_balance > 0n || p.unstaked_balance > 0n)
-    );
+    const nextPositions = pools
+      .map((p): Position | null => {
+        const account = accounts.get(p.pool_id);
+        if (!account) return null;
+        return {
+          id: p.pool_id,
+          staked_balance: BigInt(account.staked_balance),
+          unstaked_balance: BigInt(account.unstaked_balance),
+          can_withdraw: account.can_withdraw,
+        };
+      })
+      .filter((p): p is Position => !!p)
+      .filter((p) => p.staked_balance > 0n || p.unstaked_balance > 0n);
+    setPositions(nextPositions);
+
+    if (!selectionInitialized.current) {
+      const heldLiquidPool = LiquidPools.find(
+        (pool) => BigInt(nextLiquidBalances[pool.id] ?? '0') > 0n
+      );
+      setSelected(nextPositions[0]?.id ?? heldLiquidPool?.id ?? LiquidPools[0].id);
+      selectionInitialized.current = true;
+    }
     setPositionsReady(true);
-  }, [selected, signedAccountId, viewFunction]);
+  }, [selected, signedAccountId, viewFunction, loadPoolAccount]);
 
   const refresh = useCallback(() => {
-    setAccount(null);
     setPositionsReady(false);
     dedupeInFlight(`wallet-balance:${signedAccountId}`, () => getBalance(signedAccountId))
       .then((b) => setBalance(b.toString()))
@@ -179,23 +200,11 @@ export function StakingConsole() {
   // balance and every position on each click.
   useEffect(() => {
     if (!positionsReady) return;
-    const knownAccount = knownAccounts[selected];
-    if (knownAccount) {
-      setAccount(knownAccount);
-      return;
-    }
-    dedupeInFlight(
-      `pool-account:${signedAccountId}:${selected}`,
-      () =>
-        viewFunction({
-          contractId: selected,
-          method: 'get_account',
-          args: { account_id: signedAccountId },
-        }) as Promise<PoolAccount>
-    )
-      .then(setAccount)
+    if (knownAccounts[selected]) return;
+    loadPoolAccount(selected)
+      .then((account) => setKnownAccounts((accounts) => ({ ...accounts, [selected]: account })))
       .catch((e) => setLoadError(errMsg(e)));
-  }, [positionsReady, knownAccounts, selected, signedAccountId, viewFunction]);
+  }, [positionsReady, knownAccounts, selected, loadPoolAccount]);
 
   useEffect(() => {
     refresh();
@@ -212,7 +221,7 @@ export function StakingConsole() {
         liquidNearBalances={Object.fromEntries(
           LiquidPools.map((pool) => [pool.id, knownAccounts[pool.id]?.staked_balance])
         )}
-        onSelect={setSelected}
+        onSelect={selectPool}
       />
       <section className="console">
         <ValidatorList
@@ -221,7 +230,7 @@ export function StakingConsole() {
           busy={busy}
           baseApy={baseApy}
           fees={fees}
-          onSelect={setSelected}
+          onSelect={selectPool}
         />
         <div className="side">
           <div className="card">

@@ -156,6 +156,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   height: 60px;
 }
 
@@ -419,54 +420,6 @@ a {
   align-items: start;
 }
 
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.search {
-  flex: 1;
-  min-width: 140px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--mono);
-  font-size: 0.8rem;
-  padding: 8px 12px;
-  outline: none;
-}
-
-.search:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-dim);
-}
-
-.chip {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  font-family: var(--sans);
-  font-size: 0.75rem;
-  padding: 6px 14px;
-  cursor: pointer;
-}
-
-.chip:hover {
-  color: var(--ink);
-  border-color: var(--muted);
-}
-
-.chip.active {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 .meta,
 .avail {
   font-family: var(--mono);
@@ -522,10 +475,6 @@ a {
 
 .validator-heading h2 {
   margin-bottom: 0;
-}
-
-.validator-heading .hint {
-  margin: 4px 0 0;
 }
 
 .liquid-pools-section {
@@ -620,6 +569,16 @@ a {
 
 .validator-table tbody tr {
   border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.validator-table tbody tr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.validator-table tbody tr:hover .validator-name {
+  color: var(--accent);
 }
 
 .validator-table tbody tr:last-child {
@@ -644,20 +603,12 @@ a {
   text-transform: inherit;
 }
 
-.table-sort:hover,
-.validator-name:hover {
+.table-sort:hover {
   color: var(--accent);
 }
 
 .validator-name {
-  cursor: pointer;
   color: var(--ink);
-  padding: 0;
-  text-align: left;
-}
-
-.validator-name:disabled {
-  cursor: not-allowed;
 }
 
 @media (max-width: 720px) {
@@ -847,4 +798,87 @@ a {
   font-size: 0.7rem;
   color: var(--muted);
   letter-spacing: 0.08em;
+}
+
+.footer-inner {
+  display: flex;
+  justify-content: space-between;
+}
+
+@media (max-width: 480px) {
+  .wrap {
+    padding: 0 16px;
+  }
+
+  .nav-inner {
+    gap: 10px;
+    height: 56px;
+  }
+
+  .brand {
+    min-width: 0;
+    gap: 8px;
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+
+  .brand img {
+    width: 22px;
+    height: 22px;
+  }
+
+  .nav .btn {
+    max-width: 54%;
+    overflow: hidden;
+    padding: 8px 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .stack {
+    margin: 24px 0 48px;
+  }
+
+  .card {
+    padding: 18px;
+  }
+
+  .card-head .meta {
+    width: 100%;
+  }
+
+  .kv {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .kv span:last-child {
+    overflow-wrap: anywhere;
+    text-align: right;
+  }
+
+  .vrow {
+    gap: 10px;
+    padding: 11px 12px;
+  }
+
+  .vrow .num {
+    min-width: 0;
+  }
+
+  .modes {
+    overflow-x: auto;
+  }
+
+  .modes button {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+
+  .footer-inner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
 }

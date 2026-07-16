@@ -92,7 +92,7 @@ export default function Home() {
       </main>
 
       <footer className="footer">
-        <div className="wrap" style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <div className="wrap footer-inner">
           <span>NEAR STAKE © 2026</span>
           <span>BUILT ON NEAR</span>
         </div>

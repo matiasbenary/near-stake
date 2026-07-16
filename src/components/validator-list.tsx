@@ -70,24 +70,35 @@ export function ValidatorList({
     getSortedRowModel: getSortedRowModel(),
   });
 
-  const renderRow = (validator: Validator) => (
-    <tr key={validator.id} className={validator.id === selected ? 'active' : ''}>
+  const renderRow = (validator: Validator) => {
+    const select = () => {
+      if (!busy) onSelect(validator.id);
+    };
+
+    return (
+    <tr
+      key={validator.id}
+      className={validator.id === selected ? 'active' : ''}
+      tabIndex={busy ? -1 : 0}
+      aria-selected={validator.id === selected}
+      onClick={select}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          select();
+        }
+      }}
+    >
       <td>
-        <button
-          className="validator-name"
-          disabled={busy}
-          onClick={() => onSelect(validator.id)}
-        >
-          {validator.id}
-          {validator.liquid && <span className="badge">Liquid</span>}
-        </button>
+        <span className="validator-name">{validator.id}</span>
       </td>
       <td>{apyLabel(baseApy, fees[validator.id])}</td>
       <td>{validator.uptime !== undefined ? `${validator.uptime.toFixed(1)}%` : unavailable}</td>
       <td>{validator.stakePercent !== undefined ? `${validator.stakePercent.toFixed(2)}%` : unavailable}</td>
       <td>{fees[validator.id] !== undefined ? `${(fees[validator.id] * 100).toFixed(1)}%` : unavailable}</td>
     </tr>
-  );
+    );
+  };
 
   return (
     <div className="card validator-card">

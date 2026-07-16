@@ -2,8 +2,45 @@
 import { useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
 import { parseNearAmount, yoctoToNear } from 'near-api-js';
-import { LiquidPools, NetworkId } from '@/config';
+import { LiquidPools } from '@/config';
 import { apyLabel, errMsg, GAS, GAS_RESERVE, PoolAccount } from '@/lib/staking';
+
+function AmountInput({
+  amount,
+  setAmount,
+  maxAmount,
+  unit,
+  busy,
+  ariaLabel,
+  overMax = false,
+  disabled = false,
+}: {
+  amount: string;
+  setAmount: (amount: string) => void;
+  maxAmount: string;
+  unit: string;
+  busy: boolean;
+  ariaLabel: string;
+  overMax?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <div className={`amount${overMax ? ' over' : ''}`}>
+      <input
+        type="number"
+        min="0"
+        placeholder="0.0"
+        value={amount}
+        onChange={(event) => setAmount(event.target.value)}
+        aria-label={ariaLabel}
+      />
+      <button className="max" disabled={busy || disabled} onClick={() => setAmount(maxAmount)}>
+        MAX
+      </button>
+      <span className="unit">{unit}</span>
+    </div>
+  );
+}
 
 export function PoolCard({
   poolId,
@@ -97,21 +134,14 @@ export function PoolCard({
       : BigInt(account?.staked_balance ?? '0');
   const maxAmount = yoctoToNear(availYocto).replace(/,/g, '');
   const overMax = amount !== '' && Number(amount) > Number(maxAmount);
-  const isLiquid = LiquidPools.some((p) => p.id === poolId);
-  const liquidToken = LiquidPools.find((p) => p.id === poolId)?.token;
-  const isMetaPool = poolId === 'meta-pool.near' || poolId === 'meta-v2.pool.testnet';
-  const fastUnstakeUrl =
-    NetworkId === 'mainnet'
-      ? poolId === 'meta-pool.near'
-        ? 'https://main.metapool.app/stake?token=near'
-        : poolId === 'linear-protocol.near'
-        ? 'https://app.linearprotocol.org/?tab=unstake'
-        : null
-      : null;
+  const liquidPool = LiquidPools.find((pool) => pool.id === poolId);
+  const isMetaPool = liquidPool?.fastExit?.type === 'metapool';
+  const externalFastExit =
+    liquidPool?.fastExit?.type === 'external' ? liquidPool.fastExit : undefined;
   const modes: { id: typeof mode; label: string }[] = [
     { id: 'stake', label: 'Stake' },
     { id: 'unstake', label: 'Unstake' },
-    ...(isMetaPool || fastUnstakeUrl ? [{ id: 'fast' as const, label: 'Fast Unstake' }] : []),
+    ...(liquidPool?.fastExit ? [{ id: 'fast' as const, label: 'Fast Unstake' }] : []),
     { id: 'withdraw', label: 'Withdraw' },
   ];
 
@@ -129,11 +159,11 @@ export function PoolCard({
         )}
       </p>
       <div className="pool-balances">
-        {liquidToken && liquidBalance !== undefined ? (
+        {liquidPool && liquidBalance !== undefined ? (
           <div className="kv">
             <span>Staked here</span>
             <span>
-              {yoctoToNear(BigInt(liquidBalance), 2)} {liquidToken}
+              {yoctoToNear(BigInt(liquidBalance), 2)} {liquidPool.token}
               {account && ` (${yoctoToNear(BigInt(account.staked_balance), 2)} Ⓝ)`}
             </span>
           </div>
@@ -171,24 +201,15 @@ export function PoolCard({
       </div>
       {mode === 'fast' && isMetaPool ? (
         <>
-          <div className="amount">
-            <input
-              type="number"
-              min="0"
-              placeholder="0.0"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              aria-label="stNEAR amount to fast unstake"
-            />
-            <button
-              className="max"
-              disabled={busy || !liquidBalance}
-              onClick={() => setAmount(yoctoToNear(BigInt(liquidBalance!)).replace(/,/g, ''))}
-            >
-              MAX
-            </button>
-            <span className="unit">stNEAR</span>
-          </div>
+          <AmountInput
+            amount={amount}
+            setAmount={setAmount}
+            maxAmount={liquidBalance ? yoctoToNear(BigInt(liquidBalance)).replace(/,/g, '') : ''}
+            unit={liquidPool.token}
+            busy={busy}
+            disabled={!liquidBalance}
+            ariaLabel="stNEAR amount to fast unstake"
+          />
           <p className="avail">
             {liquidBalance
               ? `Available ${yoctoToNear(BigInt(liquidBalance), 2)} stNEAR`
@@ -206,32 +227,27 @@ export function PoolCard({
             {busy ? 'Confirm in wallet…' : 'Fast unstake'}
           </button>
         </>
-      ) : mode === 'fast' && fastUnstakeUrl ? (
+      ) : mode === 'fast' && externalFastExit ? (
         <>
           <p className="avail">
             Receive NEAR immediately by swapping your liquid-staking token. The provider will
             show the live quote, fee, and slippage before you approve.
           </p>
-          <a className="btn btn-block" href={fastUnstakeUrl} target="_blank" rel="noreferrer">
-            Fast unstake on {poolId === 'meta-pool.near' ? 'Meta Pool' : 'LiNEAR'}
+          <a className="btn btn-block" href={externalFastExit.url} target="_blank" rel="noreferrer">
+            Fast unstake on {externalFastExit.label}
           </a>
         </>
       ) : mode !== 'withdraw' ? (
         <>
-          <div className={`amount${overMax ? ' over' : ''}`}>
-            <input
-              type="number"
-              min="0"
-              placeholder="0.0"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              aria-label="Amount"
-            />
-            <button className="max" disabled={busy} onClick={() => setAmount(maxAmount)}>
-              MAX
-            </button>
-            <span className="unit">NEAR</span>
-          </div>
+          <AmountInput
+            amount={amount}
+            setAmount={setAmount}
+            maxAmount={maxAmount}
+            unit="NEAR"
+            busy={busy}
+            overMax={overMax}
+            ariaLabel="Amount"
+          />
           <p className={`avail${overMax ? ' error' : ''}`}>
             {overMax
               ? `Exceeds available ${yoctoToNear(availYocto, 2)} Ⓝ`
@@ -290,7 +306,7 @@ export function PoolCard({
       {success && <p className="hint ok">{success}</p>}
       <p className="hint">
         {mode === 'stake'
-          ? isLiquid
+          ? liquidPool
             ? 'Liquid pool: you receive a token representing your stake — tradable, no unlock period to exit.'
             : 'Rewards accrue every epoch (~12 h) and compound automatically.'
           : mode === 'unstake'

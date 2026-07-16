@@ -10,7 +10,6 @@ const NEARBLOCKS =
 
 export type Validator = {
   id: string;
-  stake: string;
   liquid: boolean;
   uptime?: number;
   stakePercent?: number;
@@ -106,7 +105,6 @@ async function fetchValidatorData(): Promise<ValidatorData> {
       const stakePercent = Number(v.percent);
       pools.push({
         id: v.accountId,
-        stake: v.currentEpoch.stake,
         liquid: false,
         uptime,
         stakePercent: Number.isFinite(stakePercent) ? stakePercent : undefined,
