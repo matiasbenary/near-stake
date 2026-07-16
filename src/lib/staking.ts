@@ -60,6 +60,40 @@ export const formatTokenBalance = (amount: bigint, token: string) =>
 // ponytail: module-level cache — NearBlocks free tier allows ~6 req/min and React
 // StrictMode double-mounts effects in dev, so fetch the validator list once per load
 let cache: Promise<ValidatorData> | null = null;
+const VALIDATOR_CACHE_KEY = `near-stake:validators:${NetworkId}:v2`;
+const VALIDATOR_CACHE_TTL = 60 * 60 * 1000;
+
+function readValidatorCache(): ValidatorData | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = JSON.parse(localStorage.getItem(VALIDATOR_CACHE_KEY) ?? 'null') as {
+      savedAt?: number;
+      data?: ValidatorData;
+    } | null;
+    if (
+      !stored?.savedAt ||
+      Date.now() - stored.savedAt > VALIDATOR_CACHE_TTL ||
+      !stored.data ||
+      !Array.isArray(stored.data.pools)
+    ) {
+      localStorage.removeItem(VALIDATOR_CACHE_KEY);
+      return null;
+    }
+    return stored.data;
+  } catch {
+    localStorage.removeItem(VALIDATOR_CACHE_KEY);
+    return null;
+  }
+}
+
+function writeValidatorCache(data: ValidatorData) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(VALIDATOR_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
+  } catch {
+    // The live request remains usable if browser storage is unavailable or full.
+  }
+}
 
 // Only share requests while they are running. This prevents React StrictMode (and
 // concurrent consumers) from sending the same RPC query twice, without caching
@@ -76,10 +110,20 @@ export function dedupeInFlight<T>(key: string, request: () => Promise<T>): Promi
 }
 
 export async function getValidatorData(): Promise<ValidatorData> {
-  cache ??= fetchValidatorData();
-  const data = await cache;
-  if (data.pools.length === 0) cache = null; // don't cache a rate-limited miss; retry next mount
-  return data;
+  cache ??= Promise.resolve(readValidatorCache()).then(
+    (stored) => stored ?? fetchValidatorData().then((data) => {
+      if (data.pools.length > 0) writeValidatorCache(data);
+      return data;
+    })
+  );
+  try {
+    const data = await cache;
+    if (data.pools.length === 0) cache = null; // don't cache a rate-limited miss; retry next mount
+    return data;
+  } catch (error) {
+    cache = null;
+    throw error;
+  }
 }
 
 async function fetchValidatorData(): Promise<ValidatorData> {

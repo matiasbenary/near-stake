@@ -5,6 +5,7 @@ import {
   flexRender,
   getCoreRowModel,
   getSortedRowModel,
+  SortingFn,
   SortingState,
   useReactTable,
 } from '@tanstack/react-table';
@@ -20,6 +21,12 @@ type Props = {
 };
 
 const unavailable = 'n/a';
+
+const numericSort: SortingFn<Validator> = (rowA, rowB, columnId) => {
+  const a = Number(rowA.getValue(columnId));
+  const b = Number(rowB.getValue(columnId));
+  return (Number.isFinite(a) ? a : -Infinity) - (Number.isFinite(b) ? b : -Infinity);
+};
 
 export function ValidatorList({
   validators,
@@ -48,15 +55,27 @@ export function ValidatorList({
       {
         id: 'apy',
         accessorFn: (validator) => apyNum(baseApy, fees[validator.id]),
-        header: 'Net APY',
+        header: 'Est. APY',
+        sortingFn: numericSort,
       },
-      { id: 'uptime', accessorFn: (validator) => validator.uptime ?? -1, header: 'Uptime' },
+      {
+        id: 'uptime',
+        accessorFn: (validator) => validator.uptime ?? -1,
+        header: 'Uptime',
+        sortingFn: numericSort,
+      },
+      {
+        id: 'fee',
+        accessorFn: (validator) => fees[validator.id] ?? -1,
+        header: 'Fee',
+        sortingFn: numericSort,
+      },
       {
         id: 'stakePercent',
         accessorFn: (validator) => validator.stakePercent ?? -1,
         header: 'Stake %',
+        sortingFn: numericSort,
       },
-      { id: 'fee', accessorFn: (validator) => fees[validator.id] ?? -1, header: 'Fee' },
     ],
     [baseApy, fees]
   );
@@ -94,8 +113,8 @@ export function ValidatorList({
       </td>
       <td>{apyLabel(baseApy, fees[validator.id])}</td>
       <td>{validator.uptime !== undefined ? `${validator.uptime.toFixed(1)}%` : unavailable}</td>
-      <td>{validator.stakePercent !== undefined ? `${validator.stakePercent.toFixed(2)}%` : unavailable}</td>
       <td>{fees[validator.id] !== undefined ? `${(fees[validator.id] * 100).toFixed(1)}%` : unavailable}</td>
+      <td>{validator.stakePercent !== undefined ? `${validator.stakePercent.toFixed(2)}%` : unavailable}</td>
     </tr>
     );
   };
@@ -117,7 +136,7 @@ export function ValidatorList({
                   {validator.id}
                   <span className="badge">Liquid</span>
                 </span>
-                <span>{apyLabel(baseApy, fees[validator.id])} APY</span>
+                <span>Est. {apyLabel(baseApy, fees[validator.id])} APY</span>
               </button>
             ))}
           </div>
