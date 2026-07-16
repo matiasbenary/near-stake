@@ -1,102 +1,168 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { formatNearAmount } from '@near-js/utils';
-import { apyLabel, apyNum, Position, Validator } from '@/lib/staking';
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  SortingState,
+  useReactTable,
+} from '@tanstack/react-table';
+import { apyLabel, apyNum, Validator } from '@/lib/staking';
 
-type Filter = 'all' | 'liquid' | 'mine';
-
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'liquid', label: 'Liquid' },
-  { key: 'mine', label: 'My pools' },
-];
-
-export function ValidatorList({
-  validators,
-  positions,
-  selected,
-  busy,
-  baseApy,
-  fees,
-  onSelect,
-}: {
+type Props = {
   validators: Validator[];
-  positions: Position[];
   selected: string;
   busy: boolean;
   baseApy: number | null;
   fees: Record<string, number>;
   onSelect: (id: string) => void;
-}) {
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
-  const [sortApy, setSortApy] = useState(false);
+};
 
-  const mine = useMemo(() => new Set(positions.map((p) => p.id)), [positions]);
-  const shown = validators.filter(
-    (v) =>
-      v.id.includes(query.trim().toLowerCase()) &&
-      (filter === 'all' || (filter === 'liquid' ? v.liquid : mine.has(v.id)))
+const unavailable = 'n/a';
+
+export function ValidatorList({
+  validators,
+  selected,
+  busy,
+  baseApy,
+  fees,
+  onSelect,
+}: Props) {
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'apy', desc: true }]);
+  const liquidValidators = useMemo(() => validators.filter((validator) => validator.liquid), [validators]);
+  const directValidators = useMemo(
+    () =>
+      validators.filter(
+        (validator) =>
+          !validator.liquid &&
+          validator.uptime !== undefined &&
+          apyNum(baseApy, fees[validator.id]) > 0
+      ),
+    [validators, baseApy, fees]
   );
-  if (sortApy)
-    shown.sort((a, b) => apyNum(baseApy, fees[b.id]) - apyNum(baseApy, fees[a.id]));
+
+  const columns = useMemo<ColumnDef<Validator>[]>(
+    () => [
+      { id: 'pool', accessorFn: (validator) => validator.id, header: 'Pool' },
+      {
+        id: 'apy',
+        accessorFn: (validator) => apyNum(baseApy, fees[validator.id]),
+        header: 'Net APY',
+      },
+      { id: 'uptime', accessorFn: (validator) => validator.uptime ?? -1, header: 'Uptime' },
+      {
+        id: 'stakePercent',
+        accessorFn: (validator) => validator.stakePercent ?? -1,
+        header: 'Stake %',
+      },
+      { id: 'fee', accessorFn: (validator) => fees[validator.id] ?? -1, header: 'Fee' },
+    ],
+    [baseApy, fees]
+  );
+
+  const table = useReactTable({
+    data: directValidators,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  const renderRow = (validator: Validator) => (
+    <tr key={validator.id} className={validator.id === selected ? 'active' : ''}>
+      <td>
+        <button
+          className="validator-name"
+          disabled={busy}
+          onClick={() => onSelect(validator.id)}
+        >
+          {validator.id}
+          {validator.liquid && <span className="badge">Liquid</span>}
+        </button>
+      </td>
+      <td>{apyLabel(baseApy, fees[validator.id])}</td>
+      <td>{validator.uptime !== undefined ? `${validator.uptime.toFixed(1)}%` : unavailable}</td>
+      <td>{validator.stakePercent !== undefined ? `${validator.stakePercent.toFixed(2)}%` : unavailable}</td>
+      <td>{fees[validator.id] !== undefined ? `${(fees[validator.id] * 100).toFixed(1)}%` : unavailable}</td>
+    </tr>
+  );
 
   return (
-    <div className="card">
-      <h2>Validators</h2>
-      <div className="toolbar">
-        <input
-          className="search"
-          placeholder="Search pools…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            className={`chip${filter === f.key ? ' active' : ''}`}
-            onClick={() => setFilter(f.key)}
-          >
-            {f.label}
-          </button>
-        ))}
-        <button
-          className={`chip${sortApy ? ' active' : ''}`}
-          onClick={() => setSortApy(!sortApy)}
-        >
-          Top APY
-        </button>
-      </div>
-      <div className="vlist">
-        {shown.map((v) => (
-          <button
-            key={v.id}
-            className={`vrow${v.id === selected ? ' active' : ''}`}
-            disabled={busy}
-            onClick={() => onSelect(v.id)}
-          >
-            <span className="grow">
-              {v.id}
-              {v.liquid && (
-                <span
-                  className="badge"
-                  title="Liquid staking — you receive a token you can trade; no 2-day unlock to exit"
-                >
-                  Liquid
+    <div className="card validator-card">
+      {liquidValidators.length > 0 && (
+        <section className="liquid-pools-section">
+          <h2>Liquid Staking</h2>
+          <div className="liquid-pools" aria-label="Liquid pools">
+            {liquidValidators.map((validator) => (
+              <button
+                key={validator.id}
+                className={`liquid-pool${validator.id === selected ? ' active' : ''}`}
+                disabled={busy}
+                onClick={() => onSelect(validator.id)}
+              >
+                <span>
+                  {validator.id}
+                  <span className="badge">Liquid</span>
                 </span>
-              )}
-            </span>
-            <span className="num">{apyLabel(baseApy, fees[v.id])} APY</span>
-            {!v.liquid && (
-              <span className="num dim">{formatNearAmount(v.stake, 0)} Ⓝ</span>
-            )}
-          </button>
-        ))}
+                <span>{apyLabel(baseApy, fees[validator.id])} APY</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+      <div className="validator-heading">
+        <div>
+          <h2>Validators</h2>
+        </div>
+      </div>
+      <div className="validator-table-wrap">
+        <table className="validator-table">
+          <thead>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <th key={header.id} scope="col">
+                    <button
+                      className="table-sort"
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                      <span aria-hidden="true">
+                        {header.column.getIsSorted() === 'asc'
+                          ? ' ↑'
+                          : header.column.getIsSorted() === 'desc'
+                            ? ' ↓'
+                            : ''}
+                      </span>
+                    </button>
+                  </th>
+                ))}
+              </tr>
+            ))}
+          </thead>
+          <tbody>
+            {table.getRowModel().rows.map((row) => renderRow(row.original))}
+          </tbody>
+        </table>
         {validators.length === 0 && <p className="hint">Loading validators…</p>}
-        {validators.length > 0 && shown.length === 0 && (
-          <p className="hint">No pools match.</p>
+        {validators.length > 0 && directValidators.length === 0 && (
+          <p className="hint">No validators with a positive net APY are available.</p>
         )}
       </div>
+      <p className="hint">
+        Find more information on validators at{' '}
+        <a
+          className="validator-info-link"
+          href="https://nearblocks.io/validators"
+          target="_blank"
+          rel="noreferrer"
+        >
+          NearBlocks
+        </a>
+        .
+      </p>
     </div>
   );
 }

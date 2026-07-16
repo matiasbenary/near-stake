@@ -1,12 +1,12 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
-import { formatNearAmount } from '@near-js/utils';
+import { yoctoToNear } from 'near-api-js';
 import { LiquidPools } from '@/config';
 import {
   errMsg,
+  dedupeInFlight,
   getValidatorData,
-  usd,
   FASTNEAR,
   Fee,
   PoolAccount,
@@ -29,15 +29,9 @@ export function StakingConsole() {
   const [fees, setFees] = useState<Record<string, number>>({});
   const [baseApy, setBaseApy] = useState<number | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
-  const [price, setPrice] = useState<number | null>(null);
-
-  useEffect(() => {
-    fetch('https://api.coingecko.com/api/v3/simple/price?ids=near&vs_currencies=usd')
-      .then((r) => r.json())
-      .then((d) => setPrice(d.near.usd))
-      .catch(() => {});
-  }, []);
-
+  const [liquidBalances, setLiquidBalances] = useState<Record<string, string>>({});
+  const [knownAccounts, setKnownAccounts] = useState<Record<string, PoolAccount>>({});
+  const [positionsReady, setPositionsReady] = useState(false);
   useEffect(() => {
     let stale = false;
     (async () => {
@@ -68,14 +62,16 @@ export function StakingConsole() {
   }, [provider]);
 
   useEffect(() => {
-    // liquid pools aren't validators, NearBlocks doesn't list them — 2 view calls only
+    // Liquid pools aren't validators, so their fees need two separate contract views.
     LiquidPools.forEach((p) =>
-      (
-        viewFunction({
-          contractId: p.id,
-          method: 'get_reward_fee_fraction',
-          args: {},
-        }) as Promise<Fee>
+      dedupeInFlight(
+        `fee:${p.id}`,
+        () =>
+          viewFunction({
+            contractId: p.id,
+            method: 'get_reward_fee_fraction',
+            args: {},
+          }) as Promise<Fee>
       )
         .then((f) =>
           setFees((prev) => ({ ...prev, [p.id]: f.numerator / f.denominator }))
@@ -84,51 +80,126 @@ export function StakingConsole() {
     );
   }, [viewFunction]);
 
-  const loadPositions = useCallback(() => {
-    fetch(`${FASTNEAR}/v1/account/${signedAccountId}/staking`)
-      .then((r) => r.json())
-      .then(({ pools }: { pools: { pool_id: string }[] }) =>
-        Promise.allSettled(
-          pools.map((p) =>
-            (
-              viewFunction({
-                contractId: p.pool_id,
-                method: 'get_account',
-                args: { account_id: signedAccountId },
-              }) as Promise<PoolAccount>
-            ).then((a) => ({ id: p.pool_id, ...a }))
-          )
+  const loadPoolAccounts = useCallback(async () => {
+    // FastNEAR tells us which pools to inspect, but not the per-pool balances.
+    // Query the selected pool and every held pool once each; the selected pool
+    // may already be held, so use a Set to avoid a duplicate RPC call.
+    let pools: { pool_id: string }[] = [];
+    try {
+      const data = await dedupeInFlight(
+        `staking-pools:${signedAccountId}`,
+        () =>
+          fetch(`${FASTNEAR}/v1/account/${signedAccountId}/staking`).then((r) => r.json())
+      ) as { pools?: { pool_id: string }[] };
+      pools = data.pools ?? [];
+    } catch {
+      setPositions([]);
+    }
+
+    const poolIds = [
+      ...new Set([selected, ...pools.map((p) => p.pool_id), ...LiquidPools.map((p) => p.id)]),
+    ];
+    const liquidBalanceResultsPromise = Promise.allSettled(
+      LiquidPools.map((pool) =>
+        dedupeInFlight(
+          `liquid-balance:${signedAccountId}:${pool.id}`,
+          () =>
+            viewFunction({
+              contractId: pool.id,
+              method: 'ft_balance_of',
+              args: { account_id: signedAccountId },
+            }) as Promise<string>
         )
       )
-      .then((results) =>
-        setPositions(
-          results
-            .filter((r): r is PromiseFulfilledResult<Position> => r.status === 'fulfilled')
-            .map((r) => r.value)
-            .filter(
-              (p) => BigInt(p.staked_balance) > 0n || BigInt(p.unstaked_balance) > 0n
-            )
+    );
+    const poolAccountResultsPromise = Promise.allSettled(
+      poolIds.map((poolId) =>
+        dedupeInFlight(
+          `pool-account:${signedAccountId}:${poolId}`,
+          () =>
+            viewFunction({
+              contractId: poolId,
+              method: 'get_account',
+              args: { account_id: signedAccountId },
+            }) as Promise<PoolAccount>
+        ).then((account) => ({ id: poolId, account }))
+      )
+    );
+    const [liquidBalanceResults, results] = await Promise.all([
+      liquidBalanceResultsPromise,
+      poolAccountResultsPromise,
+    ]);
+    setLiquidBalances(
+      Object.fromEntries(
+        liquidBalanceResults.flatMap((result, index) =>
+          result.status === 'fulfilled' ? [[LiquidPools[index].id, result.value]] : []
         )
       )
-      .catch(() => setPositions([]));
-  }, [signedAccountId, viewFunction]);
+    );
+    const accounts = new Map(
+      results
+        .filter(
+          (r): r is PromiseFulfilledResult<{ id: string; account: PoolAccount }> =>
+            r.status === 'fulfilled'
+        )
+        .map((r) => [r.value.id, r.value.account])
+    );
+
+    setKnownAccounts(Object.fromEntries(accounts));
+    setAccount(accounts.get(selected) ?? null);
+    setPositions(
+      pools
+        .map((p): Position | null => {
+          const account = accounts.get(p.pool_id);
+          if (!account) return null;
+          return {
+            id: p.pool_id,
+            staked_balance: BigInt(account.staked_balance),
+            unstaked_balance: BigInt(account.unstaked_balance),
+            can_withdraw: account.can_withdraw,
+          };
+        })
+        .filter((p): p is Position => !!p)
+        .filter((p) => p.staked_balance > 0n || p.unstaked_balance > 0n)
+    );
+    setPositionsReady(true);
+  }, [selected, signedAccountId, viewFunction]);
 
   const refresh = useCallback(() => {
     setAccount(null);
-    getBalance(signedAccountId)
+    setPositionsReady(false);
+    dedupeInFlight(`wallet-balance:${signedAccountId}`, () => getBalance(signedAccountId))
       .then((b) => setBalance(b.toString()))
       .catch(() => setBalance(null));
-    viewFunction({
-      contractId: selected,
-      method: 'get_account',
-      args: { account_id: signedAccountId },
-    })
+    loadPoolAccounts()
+      .catch((e) => setLoadError(errMsg(e)));
+  }, [signedAccountId, getBalance, loadPoolAccounts]);
+
+  // A pool switch only needs the selected account. Do not re-fetch the wallet
+  // balance and every position on each click.
+  useEffect(() => {
+    if (!positionsReady) return;
+    const knownAccount = knownAccounts[selected];
+    if (knownAccount) {
+      setAccount(knownAccount);
+      return;
+    }
+    dedupeInFlight(
+      `pool-account:${signedAccountId}:${selected}`,
+      () =>
+        viewFunction({
+          contractId: selected,
+          method: 'get_account',
+          args: { account_id: signedAccountId },
+        }) as Promise<PoolAccount>
+    )
       .then(setAccount)
       .catch((e) => setLoadError(errMsg(e)));
-    loadPositions();
-  }, [selected, signedAccountId, viewFunction, getBalance, loadPositions]);
+  }, [positionsReady, knownAccounts, selected, signedAccountId, viewFunction]);
 
-  useEffect(refresh, [refresh]);
+  useEffect(() => {
+    refresh();
+  }, [signedAccountId]); // refresh is intentionally reserved for sign-in and transactions
 
   return (
     <div className="stack">
@@ -137,13 +208,15 @@ export function StakingConsole() {
         positions={positions}
         selected={selected}
         busy={busy}
-        price={price}
+        liquidBalances={liquidBalances}
+        liquidNearBalances={Object.fromEntries(
+          LiquidPools.map((pool) => [pool.id, knownAccounts[pool.id]?.staked_balance])
+        )}
         onSelect={setSelected}
       />
       <section className="console">
         <ValidatorList
           validators={validators}
-          positions={positions}
           selected={selected}
           busy={busy}
           baseApy={baseApy}
@@ -153,14 +226,10 @@ export function StakingConsole() {
         <div className="side">
           <div className="card">
             <div className="kv">
-              <span>Wallet</span>
+              <span>Wallet Balance</span>
               <span>
-                {balance ? `${formatNearAmount(balance, 2)} Ⓝ${usd(balance, price)}` : '—'}
+                {balance ? `${yoctoToNear(BigInt(balance), 2)} Ⓝ` : '—'}
               </span>
-            </div>
-            <div className="kv">
-              <span>NEAR / USD</span>
-              <span>{price !== null ? `$${price.toFixed(2)}` : '—'}</span>
             </div>
           </div>
           {/* ponytail: key remounts the card on pool switch — resets mode/amount/messages for free */}
@@ -171,7 +240,7 @@ export function StakingConsole() {
             balance={balance}
             fee={fees[selected]}
             baseApy={baseApy}
-            price={price}
+            liquidBalance={liquidBalances[selected]}
             busy={busy}
             setBusy={setBusy}
             refresh={refresh}

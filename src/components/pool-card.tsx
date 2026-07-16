@@ -1,9 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
-import { parseNearAmount, formatNearAmount } from '@near-js/utils';
-import { LiquidPools } from '@/config';
-import { apyLabel, errMsg, GAS, GAS_RESERVE, PoolAccount, usd } from '@/lib/staking';
+import { parseNearAmount, yoctoToNear } from 'near-api-js';
+import { LiquidPools, NetworkId } from '@/config';
+import { apyLabel, errMsg, GAS, GAS_RESERVE, PoolAccount } from '@/lib/staking';
 
 export function PoolCard({
   poolId,
@@ -11,7 +11,7 @@ export function PoolCard({
   balance,
   fee,
   baseApy,
-  price,
+  liquidBalance,
   busy,
   setBusy,
   refresh,
@@ -21,13 +21,13 @@ export function PoolCard({
   balance: string | null;
   fee: number | undefined;
   baseApy: number | null;
-  price: number | null;
+  liquidBalance: string | undefined;
   busy: boolean;
   setBusy: (busy: boolean) => void;
   refresh: () => void;
 }) {
-  const { callFunction } = useNearWallet();
-  const [mode, setMode] = useState<'stake' | 'unstake' | 'withdraw'>('stake');
+  const { callFunction, viewFunction } = useNearWallet();
+  const [mode, setMode] = useState<'stake' | 'unstake' | 'fast' | 'withdraw'>('stake');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -37,9 +37,46 @@ export function PoolCard({
     setError('');
     setSuccess('');
     try {
-      await callFunction({ contractId: poolId, method, gas: GAS, ...params });
+      await callFunction({ contractId: poolId, method, gas: GAS.toString(), ...params });
       setAmount('');
       setSuccess(okMsg);
+      refresh();
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const metaFastUnstake = async () => {
+    const stnearToBurn = parseNearAmount(amount as `${number}`);
+    if (!stnearToBurn) return;
+
+    setBusy(true);
+    setError('');
+    setSuccess('');
+    try {
+      const stNearPrice = BigInt(
+        (await viewFunction({
+          contractId: poolId,
+          method: 'get_st_near_price',
+          args: {},
+        })) as string
+      );
+      // Meta Pool's liquidity fee is currently capped at 3%. A 5% minimum-output
+      // buffer prevents execution at materially worse terms than the live price.
+      const minExpectedNear = (BigInt(stnearToBurn) * stNearPrice * 95n) / (100n * 10n ** 24n);
+      await callFunction({
+        contractId: poolId,
+        method: 'liquid_unstake',
+        gas: GAS.toString(),
+        args: {
+          stnear_to_burn: stnearToBurn,
+          min_expected_near: minExpectedNear.toString(),
+        },
+      });
+      setAmount('');
+      setSuccess(`✓ Fast-unstaked ${amount} stNEAR`);
       refresh();
     } catch (e) {
       setError(errMsg(e));
@@ -58,9 +95,25 @@ export function PoolCard({
         ? walletYocto - GAS_RESERVE
         : 0n
       : BigInt(account?.staked_balance ?? '0');
-  const maxAmount = formatNearAmount(availYocto.toString()).replace(/,/g, '');
+  const maxAmount = yoctoToNear(availYocto).replace(/,/g, '');
   const overMax = amount !== '' && Number(amount) > Number(maxAmount);
   const isLiquid = LiquidPools.some((p) => p.id === poolId);
+  const liquidToken = LiquidPools.find((p) => p.id === poolId)?.token;
+  const isMetaPool = poolId === 'meta-pool.near' || poolId === 'meta-v2.pool.testnet';
+  const fastUnstakeUrl =
+    NetworkId === 'mainnet'
+      ? poolId === 'meta-pool.near'
+        ? 'https://main.metapool.app/stake?token=near'
+        : poolId === 'linear-protocol.near'
+        ? 'https://app.linearprotocol.org/?tab=unstake'
+        : null
+      : null;
+  const modes: { id: typeof mode; label: string }[] = [
+    { id: 'stake', label: 'Stake' },
+    { id: 'unstake', label: 'Unstake' },
+    ...(isMetaPool || fastUnstakeUrl ? [{ id: 'fast' as const, label: 'Fast Unstake' }] : []),
+    { id: 'withdraw', label: 'Withdraw' },
+  ];
 
   return (
     <div className="card">
@@ -76,47 +129,94 @@ export function PoolCard({
         )}
       </p>
       <div className="pool-balances">
-        <div className="kv">
-          <span>Staked here</span>
-          <span>
-            {account
-              ? `${formatNearAmount(account.staked_balance, 2)} Ⓝ${usd(
-                  account.staked_balance,
-                  price
-                )}`
-              : '—'}
-          </span>
-        </div>
+        {liquidToken && liquidBalance !== undefined ? (
+          <div className="kv">
+            <span>Staked here</span>
+            <span>
+              {yoctoToNear(BigInt(liquidBalance), 2)} {liquidToken}
+              {account && ` (${yoctoToNear(BigInt(account.staked_balance), 2)} Ⓝ)`}
+            </span>
+          </div>
+        ) : (
+          <div className="kv">
+            <span>Staked here</span>
+            <span>
+              {account ? `${yoctoToNear(BigInt(account.staked_balance), 2)} Ⓝ` : '—'}
+            </span>
+          </div>
+        )}
         <div className="kv">
           <span>Unstaked here</span>
           <span>
-            {account
-              ? `${formatNearAmount(account.unstaked_balance, 2)} Ⓝ${usd(
-                  account.unstaked_balance,
-                  price
-                )}`
-              : '—'}
+            {account ? `${yoctoToNear(BigInt(account.unstaked_balance), 2)} Ⓝ` : '—'}
           </span>
         </div>
       </div>
       <div className="modes">
-        {(['stake', 'unstake', 'withdraw'] as const).map((m) => (
+        {modes.map((m) => (
           <button
-            key={m}
-            className={mode === m ? 'active' : ''}
+            key={m.id}
+            className={mode === m.id ? 'active' : ''}
             disabled={busy}
             onClick={() => {
-              setMode(m);
+              setMode(m.id);
               setAmount('');
               setError('');
               setSuccess('');
             }}
           >
-            {m[0].toUpperCase() + m.slice(1)}
+            {m.label}
           </button>
         ))}
       </div>
-      {mode !== 'withdraw' ? (
+      {mode === 'fast' && isMetaPool ? (
+        <>
+          <div className="amount">
+            <input
+              type="number"
+              min="0"
+              placeholder="0.0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              aria-label="stNEAR amount to fast unstake"
+            />
+            <button
+              className="max"
+              disabled={busy || !liquidBalance}
+              onClick={() => setAmount(yoctoToNear(BigInt(liquidBalance!)).replace(/,/g, ''))}
+            >
+              MAX
+            </button>
+            <span className="unit">stNEAR</span>
+          </div>
+          <p className="avail">
+            {liquidBalance
+              ? `Available ${yoctoToNear(BigInt(liquidBalance), 2)} stNEAR`
+              : 'Loading stNEAR balance…'}
+          </p>
+          <p className="avail">
+            Fast exit uses Meta Pool liquidity. A 5% minimum-output protection is applied;
+            the live fee can be lower.
+          </p>
+          <button
+            className="btn btn-block"
+            disabled={busy || !amount || Number(amount) <= 0 || !liquidBalance}
+            onClick={metaFastUnstake}
+          >
+            {busy ? 'Confirm in wallet…' : 'Fast unstake'}
+          </button>
+        </>
+      ) : mode === 'fast' && fastUnstakeUrl ? (
+        <>
+          <p className="avail">
+            Receive NEAR immediately by swapping your liquid-staking token. The provider will
+            show the live quote, fee, and slippage before you approve.
+          </p>
+          <a className="btn btn-block" href={fastUnstakeUrl} target="_blank" rel="noreferrer">
+            Fast unstake on {poolId === 'meta-pool.near' ? 'Meta Pool' : 'LiNEAR'}
+          </a>
+        </>
+      ) : mode !== 'withdraw' ? (
         <>
           <div className={`amount${overMax ? ' over' : ''}`}>
             <input
@@ -134,12 +234,8 @@ export function PoolCard({
           </div>
           <p className={`avail${overMax ? ' error' : ''}`}>
             {overMax
-              ? `Exceeds available ${formatNearAmount(availYocto.toString(), 2)} Ⓝ`
-              : `Available ${formatNearAmount(availYocto.toString(), 2)} Ⓝ${
-                  amount && price !== null
-                    ? ` · you ${mode} ≈ $${(Number(amount) * price).toFixed(2)}`
-                    : ''
-                }`}
+              ? `Exceeds available ${yoctoToNear(availYocto, 2)} Ⓝ`
+              : `Available ${yoctoToNear(availYocto, 2)} Ⓝ`}
           </p>
           <button
             className="btn btn-block"
@@ -148,14 +244,14 @@ export function PoolCard({
               mode === 'stake'
                 ? act(
                     'deposit_and_stake',
-                    { deposit: parseNearAmount(amount)! },
+                    { deposit: parseNearAmount(amount as `${number}`) },
                     `✓ Staked ${amount} Ⓝ`
                   )
                 : amount === maxAmount
                 ? act('unstake_all', {}, `✓ Unstaked ${amount} Ⓝ — unlocks in ~2 days`)
                 : act(
                     'unstake',
-                    { args: { amount: parseNearAmount(amount)! } },
+                    { args: { amount: parseNearAmount(amount as `${number}`) } },
                     `✓ Unstaked ${amount} Ⓝ — unlocks in ~2 days`
                   )
             }
@@ -169,9 +265,9 @@ export function PoolCard({
             {!account || BigInt(account.unstaked_balance) === 0n
               ? 'Nothing to withdraw.'
               : canWithdraw
-              ? `${formatNearAmount(account.unstaked_balance, 2)} Ⓝ ready to withdraw.`
-              : `${formatNearAmount(
-                  account.unstaked_balance,
+              ? `${yoctoToNear(BigInt(account.unstaked_balance), 2)} Ⓝ ready to withdraw.`
+              : `${yoctoToNear(
+                  BigInt(account.unstaked_balance),
                   2
                 )} Ⓝ unlocking — available ~2 days (4 epochs) after you unstaked.`}
           </p>
@@ -182,7 +278,7 @@ export function PoolCard({
               act(
                 'withdraw_all',
                 {},
-                `✓ Withdrew ${formatNearAmount(account?.unstaked_balance ?? '0', 2)} Ⓝ`
+                `✓ Withdrew ${yoctoToNear(BigInt(account?.unstaked_balance ?? '0'), 2)} Ⓝ`
               )
             }
           >
@@ -199,6 +295,8 @@ export function PoolCard({
             : 'Rewards accrue every epoch (~12 h) and compound automatically.'
           : mode === 'unstake'
           ? 'Unstaked funds unlock after 4 epochs (~2 days), then withdraw them.'
+          : mode === 'fast'
+          ? 'Immediately unstake tokens, will incur in a fee.'
           : 'Withdrawing moves unlocked funds back to your wallet.'}
       </p>
     </div>

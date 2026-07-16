@@ -18,7 +18,7 @@ export const Navigation = () => {
       <div className="wrap nav-inner">
         <Link href="/" className="brand">
           <Image priority src={NearLogo} alt="NEAR" width={26} height={26} />
-          Stakingaitor
+          NEAR Stake
         </Link>
         <button
           className={signedAccountId ? 'btn btn-ghost' : 'btn'}

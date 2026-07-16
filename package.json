@@ -11,16 +11,17 @@
     "start": "next start"
   },
   "dependencies": {
-    "@near-js/utils": "^2.5.1",
-    "near-connect-hooks": "^1.0.2",
-    "next": "^15",
-    "react": "^18",
-    "react-dom": "^18"
+    "@tanstack/react-table": "^8.21.3",
+    "near-api-js": "^7.2.0",
+    "near-connect-hooks": "^1.1.6",
+    "next": "^15.5.20",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@types/node": "^24.7.0",
-    "@types/react": "^19.2.2",
-    "@types/react-dom": "^19.2.1",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "typescript": "^5.9.3"
   }
 }

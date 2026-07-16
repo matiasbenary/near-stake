@@ -4,7 +4,26 @@ import { StakingConsole } from '@/components/staking-console';
 import { NetworkId } from '@/config';
 
 export default function Home() {
-  const { signedAccountId, signIn } = useNearWallet();
+  const { signedAccountId, loading, signIn } = useNearWallet();
+
+  if (loading) {
+    return (
+      <main className="wrap connector-loading" aria-busy="true">
+        <section className="connector-loading-panel" aria-labelledby="connector-loading-title">
+          <div className="connector-loading-signal" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+          <p className="connector-loading-label">NEAR Stake</p>
+          <h1 id="connector-loading-title">Welcome!</h1>
+          <p className="connector-loading-copy" role="status">
+            The page is loading...
+          </p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <>
@@ -31,7 +50,7 @@ export default function Home() {
               </div>
               <img
                 className="hero-visual"
-                src="https://picsum.photos/seed/stakingaitor-rack/800/1000?grayscale"
+                src="https://picsum.photos/seed/near-stake-rack/800/1000?grayscale"
                 alt="Validator server infrastructure"
                 width={800}
                 height={1000}
@@ -74,7 +93,7 @@ export default function Home() {
 
       <footer className="footer">
         <div className="wrap" style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>STAKINGAITOR © 2026</span>
+          <span>NEAR STAKE © 2026</span>
           <span>BUILT ON NEAR</span>
         </div>
       </footer>
