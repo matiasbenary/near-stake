@@ -3,7 +3,15 @@ import { useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
 import { parseNearAmount, yoctoToNear } from 'near-api-js';
 import { LiquidPools } from '@/config';
-import { apyLabel, errMsg, GAS, GAS_RESERVE, PoolAccount } from '@/lib/staking';
+import {
+  apyLabel,
+  errMsg,
+  formatNearBalance,
+  formatTokenBalance,
+  GAS,
+  GAS_RESERVE,
+  PoolAccount,
+} from '@/lib/staking';
 
 function AmountInput({
   amount,
@@ -163,22 +171,24 @@ export function PoolCard({
           <div className="kv">
             <span>Staked here</span>
             <span>
-              {yoctoToNear(BigInt(liquidBalance), 2)} {liquidPool.token}
-              {account && ` (${yoctoToNear(BigInt(account.staked_balance), 2)} Ⓝ)`}
+              {formatTokenBalance(BigInt(liquidBalance), liquidPool.token)}
+              {account &&
+                BigInt(account.staked_balance) > 0n &&
+                ` (${formatNearBalance(BigInt(account.staked_balance))})`}
             </span>
           </div>
         ) : (
           <div className="kv">
             <span>Staked here</span>
             <span>
-              {account ? `${yoctoToNear(BigInt(account.staked_balance), 2)} Ⓝ` : '—'}
+              {account ? formatNearBalance(BigInt(account.staked_balance)) : '—'}
             </span>
           </div>
         )}
         <div className="kv">
           <span>Unstaked here</span>
           <span>
-            {account ? `${yoctoToNear(BigInt(account.unstaked_balance), 2)} Ⓝ` : '—'}
+              {account ? formatNearBalance(BigInt(account.unstaked_balance)) : '—'}
           </span>
         </div>
       </div>

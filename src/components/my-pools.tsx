@@ -1,8 +1,5 @@
-import { yoctoToNear } from 'near-api-js';
 import { LiquidPools } from '@/config';
-import { Position } from '@/lib/staking';
-
-const MIN_VISIBLE_NEAR = 10n ** 22n; // 0.01 Ⓝ at the displayed precision
+import { formatNearBalance, formatTokenBalance, Position } from '@/lib/staking';
 
 export function MyPools({
   positions,
@@ -31,11 +28,11 @@ export function MyPools({
   return (
     <section className="card">
       <div className="card-head">
-        <h2>My pools</h2>
+        <h2>My Staking</h2>
         <span className="meta">
-          {yoctoToNear(totalStaked, 2)} Ⓝ staked
+          {formatNearBalance(totalStaked)} staked
           {totalUnstaked > 0n &&
-            ` · ${yoctoToNear(totalUnstaked, 2)} Ⓝ unstaking`}
+            ` · ${formatNearBalance(totalUnstaked)} unstaking`}
         </span>
       </div>
       <div className="vlist">
@@ -47,32 +44,35 @@ export function MyPools({
             onClick={() => onSelect(p.id)}
           >
             <span className="grow">{p.id}</span>
-            {p.unstaked_balance >= MIN_VISIBLE_NEAR && (
+            {p.unstaked_balance > 0n && (
               <span className="num dim">
-                {yoctoToNear(p.unstaked_balance, 2)} Ⓝ{' '}
+                {formatNearBalance(p.unstaked_balance)}{' '}
                 {p.can_withdraw ? 'ready to withdraw' : 'unstaking'}
               </span>
             )}
             {p.staked_balance > 0n && (
-              <span className="num">{yoctoToNear(p.staked_balance, 2)} Ⓝ</span>
+              <span className="num">{formatNearBalance(p.staked_balance)}</span>
             )}
           </button>
         ))}
-        {heldLiquidPools.map((pool) => (
-          <button
-            key={pool.id}
-            className={`vrow${pool.id === selected ? ' active' : ''}`}
-            disabled={busy}
-            onClick={() => onSelect(pool.id)}
-          >
-            <span className="grow">{pool.id}</span>
-            <span className="num">
-              {yoctoToNear(BigInt(liquidBalances[pool.id]), 2)} {pool.token}
-              {liquidNearBalances[pool.id] &&
-                ` (${yoctoToNear(BigInt(liquidNearBalances[pool.id]!), 2)} Ⓝ)`}
-            </span>
-          </button>
-        ))}
+        {heldLiquidPools.map((pool) => {
+          const tokenBalance = BigInt(liquidBalances[pool.id]);
+          const nearBalance = BigInt(liquidNearBalances[pool.id] ?? '0');
+          return (
+            <button
+              key={pool.id}
+              className={`vrow${pool.id === selected ? ' active' : ''}`}
+              disabled={busy}
+              onClick={() => onSelect(pool.id)}
+            >
+              <span className="grow">{pool.id}</span>
+              <span className="num">
+                {formatTokenBalance(tokenBalance, pool.token)}
+                {nearBalance > 0n && ` (${formatNearBalance(nearBalance)})`}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </section>
   );

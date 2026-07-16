@@ -1,8 +1,9 @@
 import { NetworkId } from '@/config';
-import { nearToYocto, teraToGas } from 'near-api-js';
+import { nearToYocto, teraToGas, yoctoToNear } from 'near-api-js';
 
 export const GAS = teraToGas('300'); // 300 Tgas — Meta Pool needs more than the 30 Tgas default
 export const GAS_RESERVE = nearToYocto(0.1); // keep 0.1 Ⓝ in the wallet for gas
+export const MIN_DISPLAY_NEAR = 10n ** 22n; // 0.01 Ⓝ at the displayed precision
 export const FASTNEAR =
   NetworkId === 'mainnet' ? 'https://api.fastnear.com' : 'https://test.api.fastnear.com';
 const NEARBLOCKS =
@@ -45,6 +46,16 @@ export const apyLabel = (baseApy: number | null, fee: number | undefined) => {
   const n = apyNum(baseApy, fee);
   return n >= 0 ? `${n.toFixed(1)}%` : '—';
 };
+
+export const formatNearBalance = (amount: bigint) =>
+  amount > 0n && amount < MIN_DISPLAY_NEAR
+    ? '< 0.01 Ⓝ'
+    : `${yoctoToNear(amount, 2)} Ⓝ`;
+
+export const formatTokenBalance = (amount: bigint, token: string) =>
+  amount > 0n && amount < MIN_DISPLAY_NEAR
+    ? `< 0.01 ${token}`
+    : `${yoctoToNear(amount, 2)} ${token}`;
 
 // ponytail: module-level cache — NearBlocks free tier allows ~6 req/min and React
 // StrictMode double-mounts effects in dev, so fetch the validator list once per load
