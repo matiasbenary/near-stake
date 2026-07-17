@@ -7,6 +7,8 @@
   },
   "scripts": {
     "dev": "next dev",
+    "fetch:validators": "node scripts/fetch-validators.mjs",
+    "prebuild": "npm run fetch:validators",
     "build": "next build",
     "start": "next start"
   },

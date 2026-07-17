@@ -5,6 +5,7 @@ import {
   flexRender,
   getCoreRowModel,
   getSortedRowModel,
+  SortingFn,
   SortingState,
   useReactTable,
 } from '@tanstack/react-table';
@@ -16,10 +17,18 @@ type Props = {
   busy: boolean;
   baseApy: number | null;
   fees: Record<string, number>;
+  error: string;
+  onRetry: () => void;
   onSelect: (id: string) => void;
 };
 
 const unavailable = 'n/a';
+
+const numericSort: SortingFn<Validator> = (rowA, rowB, columnId) => {
+  const a = Number(rowA.getValue(columnId));
+  const b = Number(rowB.getValue(columnId));
+  return (Number.isFinite(a) ? a : -Infinity) - (Number.isFinite(b) ? b : -Infinity);
+};
 
 export function ValidatorList({
   validators,
@@ -27,6 +36,8 @@ export function ValidatorList({
   busy,
   baseApy,
   fees,
+  error,
+  onRetry,
   onSelect,
 }: Props) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'apy', desc: true }]);
@@ -48,15 +59,27 @@ export function ValidatorList({
       {
         id: 'apy',
         accessorFn: (validator) => apyNum(baseApy, fees[validator.id]),
-        header: 'Net APY',
+        header: 'Est. APY',
+        sortingFn: numericSort,
       },
-      { id: 'uptime', accessorFn: (validator) => validator.uptime ?? -1, header: 'Uptime' },
+      {
+        id: 'uptime',
+        accessorFn: (validator) => validator.uptime ?? -1,
+        header: 'Uptime',
+        sortingFn: numericSort,
+      },
+      {
+        id: 'fee',
+        accessorFn: (validator) => fees[validator.id] ?? -1,
+        header: 'Fee',
+        sortingFn: numericSort,
+      },
       {
         id: 'stakePercent',
         accessorFn: (validator) => validator.stakePercent ?? -1,
         header: 'Stake %',
+        sortingFn: numericSort,
       },
-      { id: 'fee', accessorFn: (validator) => fees[validator.id] ?? -1, header: 'Fee' },
     ],
     [baseApy, fees]
   );
@@ -94,8 +117,8 @@ export function ValidatorList({
       </td>
       <td>{apyLabel(baseApy, fees[validator.id])}</td>
       <td>{validator.uptime !== undefined ? `${validator.uptime.toFixed(1)}%` : unavailable}</td>
-      <td>{validator.stakePercent !== undefined ? `${validator.stakePercent.toFixed(2)}%` : unavailable}</td>
       <td>{fees[validator.id] !== undefined ? `${(fees[validator.id] * 100).toFixed(1)}%` : unavailable}</td>
+      <td>{validator.stakePercent !== undefined ? `${validator.stakePercent.toFixed(2)}%` : unavailable}</td>
     </tr>
     );
   };
@@ -117,7 +140,7 @@ export function ValidatorList({
                   {validator.id}
                   <span className="badge">Liquid</span>
                 </span>
-                <span>{apyLabel(baseApy, fees[validator.id])} APY</span>
+                <span>Est. {apyLabel(baseApy, fees[validator.id])} APY</span>
               </button>
             ))}
           </div>
@@ -157,7 +180,16 @@ export function ValidatorList({
             {table.getRowModel().rows.map((row) => renderRow(row.original))}
           </tbody>
         </table>
-        {validators.length === 0 && <p className="hint">Loading validators…</p>}
+        {error ? (
+          <div className="validator-load-error">
+            <p className="hint error">{error}</p>
+            <button className="btn" disabled={busy} onClick={onRetry}>
+              Retry loading validators
+            </button>
+          </div>
+        ) : validators.length === 0 ? (
+          <p className="hint">Loading validators…</p>
+        ) : null}
         {validators.length > 0 && directValidators.length === 0 && (
           <p className="hint">No validators with a positive net APY are available.</p>
         )}

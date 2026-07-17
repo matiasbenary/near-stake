@@ -25,6 +25,7 @@ export function StakingConsole() {
   const [balance, setBalance] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [validatorError, setValidatorError] = useState('');
   const [fees, setFees] = useState<Record<string, number>>({});
   const [baseApy, setBaseApy] = useState<number | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -57,34 +58,32 @@ export function StakingConsole() {
     [signedAccountId, viewFunction]
   );
 
-  useEffect(() => {
-    let stale = false;
-    (async () => {
-      try {
-        let { pools, fees: feeMap, apy } = await getValidatorData();
-        if (pools.length === 0) {
-          // fallback: plain RPC list — no fees/APY, but the console stays usable
-          const { current_validators } = await provider.viewValidators();
-          pools = current_validators
-            .filter((v) => v.account_id.includes('.pool'))
-            .sort((a, b) => (BigInt(a.stake) < BigInt(b.stake) ? 1 : -1))
-            .map((v) => ({ id: v.account_id, stake: v.stake, liquid: false }));
-        }
-        if (stale) return;
-        setValidators([
-          ...LiquidPools.map((p) => ({ id: p.id, liquid: true })),
-          ...pools,
-        ]);
-        setFees((prev) => ({ ...feeMap, ...prev }));
-        setBaseApy(apy);
-      } catch (e) {
-        if (!stale) setLoadError(errMsg(e));
+  const loadValidators = useCallback(async () => {
+    setValidatorError('');
+    try {
+      let { pools, fees: feeMap, apy } = await getValidatorData();
+      if (pools.length === 0) {
+        // fallback: plain RPC list — no fees/APY, but the console stays usable
+        const { current_validators } = await provider.viewValidators();
+        pools = current_validators
+          .filter((v) => v.account_id.includes('.pool'))
+          .sort((a, b) => (BigInt(a.stake) < BigInt(b.stake) ? 1 : -1))
+          .map((v) => ({ id: v.account_id, liquid: false }));
       }
-    })();
-    return () => {
-      stale = true;
-    };
+      setValidators([
+        ...LiquidPools.map((p) => ({ id: p.id, liquid: true })),
+        ...pools,
+      ]);
+      setFees((prev) => ({ ...feeMap, ...prev }));
+      setBaseApy(apy);
+    } catch (e) {
+      setValidatorError(errMsg(e));
+    }
   }, [provider]);
+
+  useEffect(() => {
+    loadValidators();
+  }, [loadValidators]);
 
   useEffect(() => {
     // Liquid pools aren't validators, so their fees need two separate contract views.
@@ -230,6 +229,8 @@ export function StakingConsole() {
           busy={busy}
           baseApy={baseApy}
           fees={fees}
+          error={validatorError}
+          onRetry={loadValidators}
           onSelect={selectPool}
         />
         <div className="side">

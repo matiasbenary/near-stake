@@ -116,7 +116,7 @@ export function PoolCard({
         method: 'liquid_unstake',
         gas: GAS.toString(),
         args: {
-          stnear_to_burn: stnearToBurn,
+          st_near_to_burn: stnearToBurn,
           min_expected_near: minExpectedNear.toString(),
         },
       });
@@ -157,7 +157,9 @@ export function PoolCard({
     <div className="card">
       <h2>{poolId}</h2>
       <p className="meta">
-        {baseApy !== null && fee !== undefined ? (
+        {liquidPool ? (
+          `Estimated APY ${apyLabel(baseApy, fee)}`
+        ) : baseApy !== null && fee !== undefined ? (
           <>
             APY {baseApy.toFixed(1)}% · fee {(fee * 100).toFixed(1)}% ·{' '}
             <span className="net">net {apyLabel(baseApy, fee)}</span>
@@ -234,7 +236,7 @@ export function PoolCard({
             disabled={busy || !amount || Number(amount) <= 0 || !liquidBalance}
             onClick={metaFastUnstake}
           >
-            {busy ? 'Confirm in wallet…' : 'Fast unstake'}
+            {busy ? 'Confirm in wallet…' : 'Fast Unstake'}
           </button>
         </>
       ) : mode === 'fast' && externalFastExit ? (
@@ -244,7 +246,7 @@ export function PoolCard({
             show the live quote, fee, and slippage before you approve.
           </p>
           <a className="btn btn-block" href={externalFastExit.url} target="_blank" rel="noreferrer">
-            Fast unstake on {externalFastExit.label}
+            Fast Unstake on {externalFastExit.label}
           </a>
         </>
       ) : mode !== 'withdraw' ? (

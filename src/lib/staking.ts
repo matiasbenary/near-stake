@@ -1,13 +1,9 @@
-import { NetworkId } from '@/config';
 import { nearToYocto, teraToGas, yoctoToNear } from 'near-api-js';
 
 export const GAS = teraToGas('300'); // 300 Tgas — Meta Pool needs more than the 30 Tgas default
 export const GAS_RESERVE = nearToYocto(0.1); // keep 0.1 Ⓝ in the wallet for gas
 export const MIN_DISPLAY_NEAR = 10n ** 22n; // 0.01 Ⓝ at the displayed precision
-export const FASTNEAR =
-  NetworkId === 'mainnet' ? 'https://api.fastnear.com' : 'https://test.api.fastnear.com';
-const NEARBLOCKS =
-  NetworkId === 'mainnet' ? 'https://api.nearblocks.io' : 'https://api-testnet.nearblocks.io';
+export const FASTNEAR = 'https://api.fastnear.com';
 
 export type Validator = {
   id: string;
@@ -57,9 +53,42 @@ export const formatTokenBalance = (amount: bigint, token: string) =>
     ? `< 0.01 ${token}`
     : `${yoctoToNear(amount, 2)} ${token}`;
 
-// ponytail: module-level cache — NearBlocks free tier allows ~6 req/min and React
-// StrictMode double-mounts effects in dev, so fetch the validator list once per load
+// Share one snapshot request across React StrictMode's development double-mount.
 let cache: Promise<ValidatorData> | null = null;
+const VALIDATOR_CACHE_KEY = 'near-stake:validators:mainnet:v3';
+const VALIDATOR_CACHE_TTL = 60 * 60 * 1000;
+
+function readValidatorCache(): ValidatorData | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = JSON.parse(localStorage.getItem(VALIDATOR_CACHE_KEY) ?? 'null') as {
+      savedAt?: number;
+      data?: ValidatorData;
+    } | null;
+    if (
+      !stored?.savedAt ||
+      Date.now() - stored.savedAt > VALIDATOR_CACHE_TTL ||
+      !stored.data ||
+      !Array.isArray(stored.data.pools)
+    ) {
+      localStorage.removeItem(VALIDATOR_CACHE_KEY);
+      return null;
+    }
+    return stored.data;
+  } catch {
+    localStorage.removeItem(VALIDATOR_CACHE_KEY);
+    return null;
+  }
+}
+
+function writeValidatorCache(data: ValidatorData) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(VALIDATOR_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
+  } catch {
+    // The live request remains usable if browser storage is unavailable or full.
+  }
+}
 
 // Only share requests while they are running. This prevents React StrictMode (and
 // concurrent consumers) from sending the same RPC query twice, without caching
@@ -76,55 +105,24 @@ export function dedupeInFlight<T>(key: string, request: () => Promise<T>): Promi
 }
 
 export async function getValidatorData(): Promise<ValidatorData> {
-  cache ??= fetchValidatorData();
-  const data = await cache;
-  if (data.pools.length === 0) cache = null; // don't cache a rate-limited miss; retry next mount
-  return data;
+  cache ??= Promise.resolve(readValidatorCache()).then(
+    (stored) => stored ?? fetchValidatorData().then((data) => {
+      if (data.pools.length > 0) writeValidatorCache(data);
+      return data;
+    })
+  );
+  try {
+    const data = await cache;
+    if (data.pools.length === 0) cache = null; // don't cache a rate-limited miss; retry next mount
+    return data;
+  } catch (error) {
+    cache = null;
+    throw error;
+  }
 }
 
 async function fetchValidatorData(): Promise<ValidatorData> {
-  const pools: Validator[] = [];
-  const fees: Record<string, number> = {};
-  const perPage = 100;
-  const firstPage = await fetch(`${NEARBLOCKS}/v1/validators?page=1&per_page=${perPage}`).then(
-    (response) => response.json()
-  );
-  const activeCount = Number(firstPage.currentValidators ?? firstPage.total ?? 0);
-  const pageCount = Math.max(1, Math.ceil(activeCount / perPage));
-  const remainingPages = await Promise.all(
-    Array.from({ length: pageCount - 1 }, (_, index) =>
-      fetch(`${NEARBLOCKS}/v1/validators?page=${index + 2}&per_page=${perPage}`).then((response) =>
-        response.json()
-      )
-    )
-  );
-  const pages = [firstPage, ...remainingPages];
-  const apy = Number.isFinite(Number(firstPage.lastEpochApy))
-    ? Number(firstPage.lastEpochApy)
-    : null;
-  const seen = new Set<string>();
-
-  for (const page of pages) {
-    for (const v of Array.isArray(page.validatorFullData) ? page.validatorFullData : []) {
-      if (!v.currentEpoch || seen.has(v.accountId)) continue; // inactive / kicked / proposal-only
-      seen.add(v.accountId);
-      const { produced, total } = v.currentEpoch.progress?.blocks ?? {};
-      const uptime =
-        Number.isFinite(produced) && Number.isFinite(total) && total > 0
-          ? (produced / total) * 100
-          : undefined;
-      const stakePercent = Number(v.percent);
-      pools.push({
-        id: v.accountId,
-        liquid: false,
-        uptime,
-        stakePercent: Number.isFinite(stakePercent) ? stakePercent : undefined,
-      });
-      if (v.poolInfo?.fee)
-        fees[v.accountId] = v.poolInfo.fee.numerator / v.poolInfo.fee.denominator;
-    }
-  }
-
-  pools.sort((a, b) => apyNum(apy, fees[b.id]) - apyNum(apy, fees[a.id]));
-  return { pools, fees, apy };
+  const response = await fetch('./validators.json');
+  if (!response.ok) throw new Error(`Validator snapshot request failed (${response.status})`);
+  return response.json() as Promise<ValidatorData>;
 }
