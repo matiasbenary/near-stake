@@ -29,7 +29,7 @@ export default function Home() {
     <>
       <main className="wrap">
         {signedAccountId ? (
-          <StakingConsole />
+          <StakingConsole key={signedAccountId} />
         ) : (
           <>
             <section className="hero">

@@ -1,14 +1,13 @@
 'use client';
 import { useState } from 'react';
-import { useNearWallet } from 'near-connect-hooks';
 import { parseNearAmount, yoctoToNear } from 'near-api-js';
 import { LiquidPools } from '@/config';
+import { StakingAction, useStakingAction } from '@/hooks/use-staking';
 import {
   apyLabel,
   errMsg,
   formatNearBalance,
   formatTokenBalance,
-  GAS,
   GAS_RESERVE,
   PoolAccount,
 } from '@/lib/staking';
@@ -58,8 +57,6 @@ export function PoolCard({
   baseApy,
   liquidBalance,
   busy,
-  setBusy,
-  refresh,
 }: {
   poolId: string;
   account: PoolAccount | null;
@@ -68,28 +65,22 @@ export function PoolCard({
   baseApy: number | null;
   liquidBalance: string | undefined;
   busy: boolean;
-  setBusy: (busy: boolean) => void;
-  refresh: () => void;
 }) {
-  const { callFunction, viewFunction } = useNearWallet();
   const [mode, setMode] = useState<'stake' | 'unstake' | 'fast' | 'withdraw'>('stake');
   const [amount, setAmount] = useState('');
-  const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const action = useStakingAction(poolId);
+  const isBusy = busy || action.isPending;
 
-  const act = async (method: string, params: Record<string, unknown>, okMsg: string) => {
-    setBusy(true);
-    setError('');
+  const act = async (nextAction: StakingAction, okMsg: string) => {
+    action.reset();
     setSuccess('');
     try {
-      await callFunction({ contractId: poolId, method, gas: GAS.toString(), ...params });
+      await action.mutateAsync(nextAction);
       setAmount('');
       setSuccess(okMsg);
-      refresh();
-    } catch (e) {
-      setError(errMsg(e));
-    } finally {
-      setBusy(false);
+    } catch {
+      // The mutation exposes the error for rendering below.
     }
   };
 
@@ -97,37 +88,10 @@ export function PoolCard({
     const stnearToBurn = parseNearAmount(amount as `${number}`);
     if (!stnearToBurn) return;
 
-    setBusy(true);
-    setError('');
-    setSuccess('');
-    try {
-      const stNearPrice = BigInt(
-        (await viewFunction({
-          contractId: poolId,
-          method: 'get_st_near_price',
-          args: {},
-        })) as string
-      );
-      // Meta Pool's liquidity fee is currently capped at 3%. A 5% minimum-output
-      // buffer prevents execution at materially worse terms than the live price.
-      const minExpectedNear = (BigInt(stnearToBurn) * stNearPrice * 95n) / (100n * 10n ** 24n);
-      await callFunction({
-        contractId: poolId,
-        method: 'liquid_unstake',
-        gas: GAS.toString(),
-        args: {
-          st_near_to_burn: stnearToBurn,
-          min_expected_near: minExpectedNear.toString(),
-        },
-      });
-      setAmount('');
-      setSuccess(`✓ Fast-unstaked ${amount} stNEAR`);
-      refresh();
-    } catch (e) {
-      setError(errMsg(e));
-    } finally {
-      setBusy(false);
-    }
+    await act(
+      { type: 'fastUnstake', amount: stnearToBurn },
+      `✓ Fast-unstaked ${amount} stNEAR`
+    );
   };
 
   const canWithdraw =
@@ -199,11 +163,11 @@ export function PoolCard({
           <button
             key={m.id}
             className={mode === m.id ? 'active' : ''}
-            disabled={busy}
+            disabled={isBusy}
             onClick={() => {
               setMode(m.id);
               setAmount('');
-              setError('');
+              action.reset();
               setSuccess('');
             }}
           >
@@ -218,7 +182,7 @@ export function PoolCard({
             setAmount={setAmount}
             maxAmount={liquidBalance ? yoctoToNear(BigInt(liquidBalance)).replace(/,/g, '') : ''}
             unit={liquidPool.token}
-            busy={busy}
+            busy={isBusy}
             disabled={!liquidBalance}
             ariaLabel="stNEAR amount to fast unstake"
           />
@@ -233,10 +197,10 @@ export function PoolCard({
           </p>
           <button
             className="btn btn-block"
-            disabled={busy || !amount || Number(amount) <= 0 || !liquidBalance}
+            disabled={isBusy || !amount || Number(amount) <= 0 || !liquidBalance}
             onClick={metaFastUnstake}
           >
-            {busy ? 'Confirm in wallet…' : 'Fast Unstake'}
+            {isBusy ? 'Confirm in wallet…' : 'Fast Unstake'}
           </button>
         </>
       ) : mode === 'fast' && externalFastExit ? (
@@ -256,7 +220,7 @@ export function PoolCard({
             setAmount={setAmount}
             maxAmount={maxAmount}
             unit="NEAR"
-            busy={busy}
+            busy={isBusy}
             overMax={overMax}
             ariaLabel="Amount"
           />
@@ -267,24 +231,31 @@ export function PoolCard({
           </p>
           <button
             className="btn btn-block"
-            disabled={busy || !amount || Number(amount) <= 0 || overMax}
+            disabled={isBusy || !amount || Number(amount) <= 0 || overMax}
             onClick={() =>
               mode === 'stake'
                 ? act(
-                    'deposit_and_stake',
-                    { deposit: parseNearAmount(amount as `${number}`) },
+                    {
+                      type: 'stake',
+                      amount: parseNearAmount(amount as `${number}`) ?? '0',
+                    },
                     `✓ Staked ${amount} Ⓝ`
                   )
                 : amount === maxAmount
-                ? act('unstake_all', {}, `✓ Unstaked ${amount} Ⓝ — unlocks in ~2 days`)
+                ? act(
+                    { type: 'unstake' },
+                    `✓ Unstaked ${amount} Ⓝ — unlocks in ~2 days`
+                  )
                 : act(
-                    'unstake',
-                    { args: { amount: parseNearAmount(amount as `${number}`) } },
+                    {
+                      type: 'unstake',
+                      amount: parseNearAmount(amount as `${number}`) ?? '0',
+                    },
                     `✓ Unstaked ${amount} Ⓝ — unlocks in ~2 days`
                   )
             }
           >
-            {busy ? 'Confirm in wallet…' : mode === 'stake' ? 'Stake' : 'Unstake'}
+            {isBusy ? 'Confirm in wallet…' : mode === 'stake' ? 'Stake' : 'Unstake'}
           </button>
         </>
       ) : (
@@ -301,20 +272,19 @@ export function PoolCard({
           </p>
           <button
             className="btn btn-block"
-            disabled={busy || !canWithdraw}
+            disabled={isBusy || !canWithdraw}
             onClick={() =>
               act(
-                'withdraw_all',
-                {},
+                { type: 'withdraw' },
                 `✓ Withdrew ${yoctoToNear(BigInt(account?.unstaked_balance ?? '0'), 2)} Ⓝ`
               )
             }
           >
-            {busy ? 'Confirm in wallet…' : 'Withdraw all'}
+            {isBusy ? 'Confirm in wallet…' : 'Withdraw all'}
           </button>
         </>
       )}
-      {error && <p className="hint error">{error}</p>}
+      {action.error && <p className="hint error">{errMsg(action.error)}</p>}
       {success && <p className="hint ok">{success}</p>}
       <p className="hint">
         {mode === 'stake'

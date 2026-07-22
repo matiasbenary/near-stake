@@ -1,11 +1,9 @@
-'use client';
 import '@/app/globals.css';
 
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { Navigation } from '@/components/navigation';
-import { NearProvider } from 'near-connect-hooks';
 import { ReactNode } from 'react';
-import { NetworkId, RpcUrls } from '@/config';
+import { AppProviders } from '@/components/app-providers';
 
 const sans = Inter({
   subsets: ['latin'],
@@ -21,10 +19,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <body>
-        <NearProvider config={{ network: NetworkId, providers: RpcUrls }}>
+        <AppProviders>
           <Navigation />
           {children}
-        </NearProvider>
+        </AppProviders>
       </body>
     </html>
   );

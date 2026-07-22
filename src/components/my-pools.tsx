@@ -1,30 +1,44 @@
 import { LiquidPools } from '@/config';
-import { formatNearBalance, formatTokenBalance, Position } from '@/lib/staking';
+import {
+  formatNearBalance,
+  formatTokenBalance,
+  PoolAccount,
+  Position,
+} from '@/lib/staking';
 
 export function MyPools({
   positions,
   selected,
   busy,
   liquidBalances,
-  liquidNearBalances,
+  liquidAccounts,
   onSelect,
 }: {
   positions: Position[];
   selected: string;
   busy: boolean;
   liquidBalances: Record<string, string>;
-  liquidNearBalances: Record<string, string | undefined>;
+  liquidAccounts: Record<string, PoolAccount | undefined>;
   onSelect: (id: string) => void;
 }) {
-  const heldLiquidPools = LiquidPools.filter((pool) => BigInt(liquidBalances[pool.id] ?? '0') > 0n);
-  if (positions.length === 0 && heldLiquidPools.length === 0) return null;
+  const activeLiquidPools = LiquidPools.filter((pool) => {
+    const tokenBalance = BigInt(liquidBalances[pool.id] ?? '0');
+    const unstakedBalance = BigInt(liquidAccounts[pool.id]?.unstaked_balance ?? '0');
+    return tokenBalance > 0n || unstakedBalance > 0n;
+  });
+  if (positions.length === 0 && activeLiquidPools.length === 0) return null;
   const totalDirectStaked = positions.reduce((s, p) => s + p.staked_balance, 0n);
-  const totalLiquidStaked = heldLiquidPools.reduce(
-    (sum, pool) => sum + BigInt(liquidNearBalances[pool.id] ?? '0'),
+  const totalLiquidStaked = activeLiquidPools.reduce(
+    (sum, pool) => sum + BigInt(liquidAccounts[pool.id]?.staked_balance ?? '0'),
     0n
   );
   const totalStaked = totalDirectStaked + totalLiquidStaked;
-  const totalUnstaked = positions.reduce((s, p) => s + p.unstaked_balance, 0n);
+  const totalDirectUnstaked = positions.reduce((s, p) => s + p.unstaked_balance, 0n);
+  const totalLiquidUnstaked = activeLiquidPools.reduce(
+    (sum, pool) => sum + BigInt(liquidAccounts[pool.id]?.unstaked_balance ?? '0'),
+    0n
+  );
+  const totalUnstaked = totalDirectUnstaked + totalLiquidUnstaked;
   return (
     <section className="card">
       <div className="card-head">
@@ -55,9 +69,11 @@ export function MyPools({
             )}
           </button>
         ))}
-        {heldLiquidPools.map((pool) => {
-          const tokenBalance = BigInt(liquidBalances[pool.id]);
-          const nearBalance = BigInt(liquidNearBalances[pool.id] ?? '0');
+        {activeLiquidPools.map((pool) => {
+          const tokenBalance = BigInt(liquidBalances[pool.id] ?? '0');
+          const account = liquidAccounts[pool.id];
+          const nearBalance = BigInt(account?.staked_balance ?? '0');
+          const unstakedBalance = BigInt(account?.unstaked_balance ?? '0');
           return (
             <button
               key={pool.id}
@@ -66,10 +82,18 @@ export function MyPools({
               onClick={() => onSelect(pool.id)}
             >
               <span className="grow">{pool.id}</span>
-              <span className="num">
-                {formatTokenBalance(tokenBalance, pool.token)}
-                {nearBalance > 0n && ` (${formatNearBalance(nearBalance)})`}
-              </span>
+              {unstakedBalance > 0n && (
+                <span className="num dim">
+                  {formatNearBalance(unstakedBalance)}{' '}
+                  {account?.can_withdraw ? 'ready to withdraw' : 'unstaking'}
+                </span>
+              )}
+              {tokenBalance > 0n && (
+                <span className="num">
+                  {formatTokenBalance(tokenBalance, pool.token)}
+                  {nearBalance > 0n && ` (${formatNearBalance(nearBalance)})`}
+                </span>
+              )}
             </button>
           );
         })}

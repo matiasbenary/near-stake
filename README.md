@@ -36,21 +36,15 @@ npm run build
 npm run start
 ```
 
-## Network configuration
+## Network
 
-The application uses NEAR mainnet by default. To run against testnet, add this to `.env.local`:
-
-```bash
-NEXT_PUBLIC_NEAR_NETWORK=testnet
-```
-
-RPC endpoints and liquid-pool configuration live in [`src/config.ts`](src/config.ts).
+This application supports NEAR mainnet only. RPC endpoints and liquid-pool configuration live in [`src/config.ts`](src/config.ts).
 
 ## Data sources
 
-The validator directory is read from NearBlocks. Account staking positions are discovered through FastNEAR and then verified with each pool contract's `get_account` view method. Liquid-staking token balances use `ft_balance_of`.
+The deployed mainnet validator directory is a static `validators.json` snapshot. The GitHub Pages workflow refreshes it hourly using NearBlocks v3, so page visitors do not call NearBlocks for the validator table. Account staking positions are discovered through FastNEAR and then verified with each pool contract's `get_account` view method. Liquid-staking token balances use `ft_balance_of`.
 
-These are browser-side requests. A static deployment does not proxy them through the hosting provider, so public API rate limits and availability still apply. For a high-traffic deployment, add a cached server-side endpoint for the validator list and use provider credentials where available.
+To authenticate snapshot refreshes, add a repository Actions secret named `NEARBLOCKS_API_KEY`. It is supplied only to the workflow's generator step and is not included in the generated site or browser requests.
 
 ## Notes
 
