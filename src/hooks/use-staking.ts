@@ -84,12 +84,18 @@ export function useValidatorData() {
 }
 
 export function useWalletBalance(accountId: string) {
-  const { getBalance } = useNearWallet();
+  const { provider } = useNearWallet();
   return useQuery({
     queryKey: keys.walletBalance(accountId),
     enabled: accountId.length > 0,
     staleTime: 30_000,
-    queryFn: async () => (await getBalance(accountId)).toString(),
+    queryFn: async () =>
+      (
+        await provider.viewAccount({
+          accountId,
+          blockQuery: { finality: 'optimistic' },
+        })
+      ).amount.toString(),
   });
 }
 
