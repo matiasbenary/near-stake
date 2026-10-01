@@ -58,10 +58,7 @@ export function StakingConsole() {
         liquidAccounts={staking.accounts}
         onSelect={setSelectedByUser}
       />
-      <section className="management-workspace" aria-labelledby="management-title">
-        <header className="management-heading">
-          <h2 className="section-label" id="management-title">Stake and manage</h2>
-        </header>
+      <section className="management-workspace">
         <div className="console">
           <div className="workspace-column">
             <ValidatorList
@@ -76,6 +73,7 @@ export function StakingConsole() {
             />
           </div>
           <aside className="side action-panel">
+            <h2 className="section-label">Stake &amp; Manage</h2>
             {selected.kind === 'lockup' && lockup.data ? (
               <LockupCard key={lockup.data.id} position={lockup.data} busy={busy} />
             ) : selected.kind === 'pool' ? (

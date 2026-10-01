@@ -55,7 +55,7 @@ export function ValidatorList({
 
   const columns = useMemo<ColumnDef<Validator>[]>(
     () => [
-      { id: 'pool', accessorFn: (validator) => validator.id, header: 'Pool' },
+      { id: 'account', accessorFn: (validator) => validator.id, header: 'Account' },
       {
         id: 'apy',
         accessorFn: (validator) => apyNum(baseApy, fees[validator.id]),
@@ -113,7 +113,10 @@ export function ValidatorList({
       }}
     >
       <td>
-        <span className="validator-name">{validator.id}</span>
+        <span className="validator-name">
+          {validator.id}
+          {validator.liquid && <span className="badge">Liquid</span>}
+        </span>
       </td>
       <td>{apyLabel(baseApy, fees[validator.id])}</td>
       <td>{validator.uptime !== undefined ? `${validator.uptime.toFixed(1)}%` : unavailable}</td>
@@ -124,88 +127,66 @@ export function ValidatorList({
   };
 
   return (
-    <div className="card validator-card">
-      {liquidValidators.length > 0 && (
-        <section className="liquid-pools-section">
-          <h2>Liquid Staking</h2>
-          <div className="liquid-pools" aria-label="Liquid pools">
-            {liquidValidators.map((validator) => (
-              <button
-                key={validator.id}
-                className={`liquid-pool${validator.id === selected ? ' active' : ''}`}
-                disabled={busy}
-                onClick={() => onSelect(validator.id)}
-              >
-                <span>
-                  {validator.id}
-                  <span className="badge">Liquid</span>
-                </span>
-                <span>Est. {apyLabel(baseApy, fees[validator.id])} APY</span>
+    <section className="validator-group">
+      <h2 className="section-label">Pools &amp; Validators</h2>
+      <div className="card validator-card">
+        <div className="validator-table-wrap">
+          <table className="validator-table">
+            <thead>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <th key={header.id} scope="col">
+                      <button
+                        className="table-sort"
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        <span aria-hidden="true">
+                          {header.column.getIsSorted() === 'asc'
+                            ? ' ↑'
+                            : header.column.getIsSorted() === 'desc'
+                              ? ' ↓'
+                              : ''}
+                        </span>
+                      </button>
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {liquidValidators.map(renderRow)}
+              {table.getRowModel().rows.map((row) => renderRow(row.original))}
+            </tbody>
+          </table>
+          {error ? (
+            <div className="validator-load-error">
+              <p className="hint error">{error}</p>
+              <button className="btn" disabled={busy} onClick={onRetry}>
+                Retry loading validators
               </button>
-            ))}
-          </div>
-        </section>
-      )}
-      <div className="validator-heading">
-        <div>
-          <h2>Validators</h2>
+            </div>
+          ) : validators.length === 0 ? (
+            <p className="hint">Loading validators…</p>
+          ) : null}
+          {validators.length > 0 && directValidators.length === 0 && (
+            <p className="hint">No validators with a positive net APY are available.</p>
+          )}
         </div>
+        <p className="hint">
+          Find more information on validators at{' '}
+          <a
+            className="validator-info-link"
+            href="https://nearblocks.io/validators"
+            target="_blank"
+            rel="noreferrer"
+          >
+            NearBlocks
+          </a>
+          .
+        </p>
       </div>
-      <div className="validator-table-wrap">
-        <table className="validator-table">
-          <thead>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <th key={header.id} scope="col">
-                    <button
-                      className="table-sort"
-                      onClick={header.column.getToggleSortingHandler()}
-                    >
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                      <span aria-hidden="true">
-                        {header.column.getIsSorted() === 'asc'
-                          ? ' ↑'
-                          : header.column.getIsSorted() === 'desc'
-                            ? ' ↓'
-                            : ''}
-                      </span>
-                    </button>
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {table.getRowModel().rows.map((row) => renderRow(row.original))}
-          </tbody>
-        </table>
-        {error ? (
-          <div className="validator-load-error">
-            <p className="hint error">{error}</p>
-            <button className="btn" disabled={busy} onClick={onRetry}>
-              Retry loading validators
-            </button>
-          </div>
-        ) : validators.length === 0 ? (
-          <p className="hint">Loading validators…</p>
-        ) : null}
-        {validators.length > 0 && directValidators.length === 0 && (
-          <p className="hint">No validators with a positive net APY are available.</p>
-        )}
-      </div>
-      <p className="hint">
-        Find more information on validators at{' '}
-        <a
-          className="validator-info-link"
-          href="https://nearblocks.io/validators"
-          target="_blank"
-          rel="noreferrer"
-        >
-          NearBlocks
-        </a>
-        .
-      </p>
-    </div>
+    </section>
   );
 }

@@ -45,6 +45,7 @@ export function MyPools({
     0n
   );
   const totalUnstaked = totalDirectUnstaked + totalLiquidUnstaked + lockupUnstaked;
+  const totalBalance = totalStaked + totalUnstaked;
   const positionCount = positions.length + activeLiquidPools.length + (lockup ? 1 : 0);
   const lockupSelected =
     !!lockup && sameSelection(selected, { kind: 'lockup', lockupId: lockup.id });
@@ -54,8 +55,8 @@ export function MyPools({
         <h2 className="section-label" id="staking-overview-title">
           My Staking
         </h2>
-        <p className="staking-total">{formatNearBalance(totalStaked)}</p>
-        <p className="staking-total-label">Total staked</p>
+        <p className="staking-total">{formatNearBalance(totalBalance)}</p>
+        <p className="staking-total-label">Total staking balance</p>
         <p className="staking-overview-meta">
           {positionCount} {positionCount === 1 ? 'position' : 'positions'}
           {totalUnstaked > 0n && ` · ${formatNearBalance(totalUnstaked)} unstaking`}
@@ -65,13 +66,14 @@ export function MyPools({
         {lockup && (
           <button
             key={lockup.id}
-            className={`vrow lockup-row${lockupSelected ? ' active' : ''}`}
+            className={`vrow${lockupSelected ? ' active' : ''}`}
             disabled={busy}
             aria-pressed={lockupSelected}
             onClick={() => onSelect({ kind: 'lockup', lockupId: lockup.id })}
           >
             <span className="grow">
-              Lockup <span className="badge">{lockup.poolId ?? 'Funds'}</span>
+              {lockup.poolId ?? 'Lockup funds'}{' '}
+              <span className="badge lockup-badge">Lockup</span>
             </span>
             {lockupUnstaked > 0n && (
               <span className="num dim">
