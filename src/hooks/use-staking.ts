@@ -10,6 +10,7 @@ import {
   getValidatorData,
   PoolAccount,
   Position,
+  stakingMutationKey,
   Validator,
 } from '@/lib/staking';
 
@@ -23,8 +24,6 @@ const keys = {
   poolAccount: (accountId: string, poolId: string) =>
     ['pool-account', accountId, poolId] as const,
 };
-
-export const stakingMutationKey = ['staking-action'] as const;
 
 export function useValidatorData() {
   const { provider, viewFunction } = useNearWallet();

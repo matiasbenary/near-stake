@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { parseNearAmount, yoctoToNear } from 'near-api-js';
 import { LiquidPools } from '@/config';
 import { StakingAction, useStakingAction } from '@/hooks/use-staking';
+import { AmountInput } from './amount-input';
 import {
   apyLabel,
   errMsg,
@@ -11,43 +12,6 @@ import {
   GAS_RESERVE,
   PoolAccount,
 } from '@/lib/staking';
-
-function AmountInput({
-  amount,
-  setAmount,
-  maxAmount,
-  unit,
-  busy,
-  ariaLabel,
-  overMax = false,
-  disabled = false,
-}: {
-  amount: string;
-  setAmount: (amount: string) => void;
-  maxAmount: string;
-  unit: string;
-  busy: boolean;
-  ariaLabel: string;
-  overMax?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <div className={`amount${overMax ? ' over' : ''}`}>
-      <input
-        type="number"
-        min="0"
-        placeholder="0.0"
-        value={amount}
-        onChange={(event) => setAmount(event.target.value)}
-        aria-label={ariaLabel}
-      />
-      <button className="max" disabled={busy || disabled} onClick={() => setAmount(maxAmount)}>
-        MAX
-      </button>
-      <span className="unit">{unit}</span>
-    </div>
-  );
-}
 
 export function PoolCard({
   poolId,

@@ -4,6 +4,7 @@ export const GAS = teraToGas('30');
 export const GAS_RESERVE = nearToYocto(0.1); // keep 0.1 Ⓝ in the wallet for gas
 export const MIN_DISPLAY_NEAR = 10n ** 22n; // 0.01 Ⓝ at the displayed precision
 export const FASTNEAR = 'https://api.fastnear.com';
+export const stakingMutationKey = ['staking-action'] as const;
 
 export type Validator = {
   id: string;

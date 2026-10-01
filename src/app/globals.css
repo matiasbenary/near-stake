@@ -312,6 +312,11 @@ a {
   align-content: start;
 }
 
+.side > .card {
+  width: 100%;
+  min-width: 0;
+}
+
 .kv {
   display: flex;
   justify-content: space-between;
@@ -409,8 +414,72 @@ a {
 /* ---- staking console ---- */
 .stack {
   display: grid;
-  gap: 16px;
+  gap: 32px;
   margin: 40px 0 72px;
+}
+
+.section-label {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.staking-overview {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.75fr) minmax(0, 2fr);
+  gap: 32px;
+  padding: 28px;
+  border: 1px solid #303a42;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.staking-overview-summary {
+  align-self: center;
+}
+
+.staking-total {
+  margin-top: 12px;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 4vw, 2.8rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.staking-total-label {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.staking-overview-meta {
+  margin-top: 18px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.staking-position-list {
+  max-height: 480px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.management-workspace {
+  min-width: 0;
+}
+
+.management-heading {
+  margin-bottom: 10px;
 }
 
 .console {
@@ -418,6 +487,11 @@ a {
   grid-template-columns: 3fr 2fr;
   gap: 16px;
   align-items: start;
+}
+
+.workspace-column,
+.action-panel {
+  min-width: 0;
 }
 
 .meta,
@@ -635,6 +709,11 @@ a {
 }
 
 @media (max-width: 720px) {
+  .staking-overview {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+
   .console {
     grid-template-columns: 1fr;
   }
@@ -643,13 +722,6 @@ a {
   .console .side {
     order: -1;
   }
-}
-
-.vlist {
-  max-height: 480px;
-  overflow-y: auto;
-  border: 1px solid var(--line);
-  border-radius: 8px;
 }
 
 .vrow {
@@ -681,14 +753,33 @@ a {
 }
 
 .vrow.active {
-  background: var(--accent-dim);
-  color: var(--accent);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: rgba(45, 212, 167, 0.16);
+  color: var(--ink);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.vrow.active .grow,
-.vrow.active .dim {
-  color: var(--accent);
+.vrow.active .grow {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.lockup-row {
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.lockup-row .grow {
+  flex-basis: 100%;
+}
+
+.lockup-id {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .modes {
@@ -849,6 +940,13 @@ a {
 
   .stack {
     margin: 24px 0 48px;
+    gap: 28px;
+  }
+
+  .staking-overview {
+    grid-template-columns: 1fr;
+    gap: 22px;
+    padding: 20px;
   }
 
   .card {
